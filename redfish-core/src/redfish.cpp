@@ -73,6 +73,8 @@ RedfishService::RedfishService(App& app)
 
     requestAccountServiceRoutes(app);
     requestAccountServiceMFARoutes(app);
+    requestRoutesAssembly(app);
+
     if constexpr (BMCWEB_REDFISH_AGGREGATION)
     {
         requestRoutesAggregationService(app);
@@ -119,7 +121,6 @@ RedfishService::RedfishService(App& app)
     requestRoutesDrive(app);
     requestRoutesCable(app);
     requestRoutesCableCollection(app);
-    requestRoutesAssembly(app);
 
     requestRoutesSystemLogServiceCollection(app);
     requestRoutesEventLogService(app);
