@@ -577,6 +577,7 @@ Fields common to all schemas
 - Links/ManagerInChassis
 - Links/SoftwareImages
 - Links/SoftwareImages@odata.count
+- LocationIndicatorActive
 - LogServices
 - ManagerType
 - Manufacturer
