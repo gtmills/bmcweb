@@ -34,6 +34,11 @@
 #include "utils/sw_utils.hpp"
 #include "utils/time_utils.hpp"
 
+#ifdef BMCWEB_ENABLE_IBM_LED_EXTENSIONS
+#include "oem/ibm/lamp_test.hpp"
+#include "oem/ibm/system_attention_indicator.hpp"
+#endif
+
 #include <boost/asio/error.hpp>
 #include <boost/container/flat_map.hpp>
 #include <boost/system/error_code.hpp>
@@ -3424,6 +3429,11 @@ inline void
     getStopBootOnFault(asyncResp);
     getAutomaticRetryPolicy(asyncResp);
     getLastResetTime(asyncResp);
+#ifdef BMCWEB_ENABLE_IBM_LED_EXTENSIONS
+    getLampTestState(asyncResp);
+    getSAI(asyncResp, "PartitionSystemAttentionIndicator");
+    getSAI(asyncResp, "PlatformSystemAttentionIndicator");
+#endif
 #ifdef BMCWEB_ENABLE_REDFISH_PROVISIONING_FEATURE
     getProvisioningStatus(asyncResp);
 #endif
@@ -3478,6 +3488,7 @@ inline void handleComputerSystemPatch(
     std::optional<uint64_t> ipsEnterTime;
     std::optional<uint8_t> ipsExitUtil;
     std::optional<uint64_t> ipsExitTime;
+    std::optional<nlohmann::json> oem;
 
     // clang-format off
                 if (!json_util::readJsonPatch(
@@ -3500,7 +3511,8 @@ inline void handleComputerSystemPatch(
                         "IdlePowerSaver/EnterUtilizationPercent", ipsEnterUtil,
                         "IdlePowerSaver/EnterDwellTimeSeconds", ipsEnterTime,
                         "IdlePowerSaver/ExitUtilizationPercent", ipsExitUtil,
-                        "IdlePowerSaver/ExitDwellTimeSeconds", ipsExitTime))
+                        "IdlePowerSaver/ExitDwellTimeSeconds", ipsExitTime,
+                        "Oem", oem))
                 {
                     return;
                 }
@@ -3566,6 +3578,45 @@ inline void handleComputerSystemPatch(
     if (powerMode)
     {
         setPowerMode(asyncResp, *powerMode);
+    }
+
+    if (oem)
+    {
+        std::optional<nlohmann::json> ibmOem;
+        if (!redfish::json_util::readJson(*oem, asyncResp->res, "IBM", ibmOem))
+        {
+            return;
+        }
+
+        if (ibmOem)
+        {
+#ifdef BMCWEB_ENABLE_IBM_LED_EXTENSIONS
+            std::optional<bool> lampTest;
+            std::optional<bool> partitionSAI;
+            std::optional<bool> platformSAI;
+            if (!json_util::readJson(
+                    *ibmOem, asyncResp->res, "LampTest", lampTest,
+                    "PartitionSystemAttentionIndicator", partitionSAI,
+                    "PlatformSystemAttentionIndicator", platformSAI))
+            {
+                return;
+            }
+            if (lampTest)
+            {
+                setLampTestState(asyncResp, *lampTest);
+            }
+            if (partitionSAI)
+            {
+                setSAI(asyncResp, "PartitionSystemAttentionIndicator",
+                       *partitionSAI);
+            }
+            if (platformSAI)
+            {
+                setSAI(asyncResp, "PlatformSystemAttentionIndicator",
+                       *platformSAI);
+            }
+#endif
+        }
     }
 
     if (ipsEnable || ipsEnterUtil || ipsEnterTime || ipsExitUtil || ipsExitTime)
