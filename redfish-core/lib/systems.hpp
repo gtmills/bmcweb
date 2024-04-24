@@ -22,7 +22,6 @@
 #include "dbus_utility.hpp"
 #include "generated/enums/computer_system.hpp"
 #include "generated/enums/resource.hpp"
-#include "health.hpp"
 #include "hypervisor_system.hpp"
 #include "led.hpp"
 #include "query.hpp"
@@ -216,26 +215,6 @@ inline void
         "xyz.openbmc_project.Inventory.Item", "Present",
         std::move(getCpuPresenceState));
 
-    if constexpr (bmcwebEnableProcMemStatus)
-    {
-        auto getCpuFunctionalState =
-            [asyncResp](const boost::system::error_code& ec3,
-                        const bool cpuFunctionalCheck) {
-            if (ec3)
-            {
-                BMCWEB_LOG_ERROR("DBUS response error {}", ec3);
-                return;
-            }
-            modifyCpuFunctionalState(asyncResp, cpuFunctionalCheck);
-        };
-
-        // Get the Functional State
-        sdbusplus::asio::getProperty<bool>(
-            *crow::connections::systemBus, service, path,
-            "xyz.openbmc_project.State.Decorator.OperationalStatus",
-            "Functional", std::move(getCpuFunctionalState));
-    }
-
     sdbusplus::asio::getAllProperties(
         *crow::connections::systemBus, service, path,
         "xyz.openbmc_project.Inventory.Item.Cpu",
@@ -256,39 +235,18 @@ inline void
  * @brief processMemoryProperties fields
  *
  * @param[in] asyncResp Shared pointer for completing asynchronous calls
- * @param[in] service dbus service for memory Information
- * @param[in] path dbus path for Memory
  * @param[in] DBUS properties for memory
  *
  * @return None.
  */
 inline void
     processMemoryProperties(const std::shared_ptr<bmcweb::AsyncResp>& asyncResp,
-                            [[maybe_unused]] const std::string& service,
-                            [[maybe_unused]] const std::string& path,
                             const dbus::utility::DBusPropertiesMap& properties)
 {
     BMCWEB_LOG_DEBUG("Got {} Dimm properties.", properties.size());
 
     if (properties.empty())
     {
-        if constexpr (bmcwebEnableProcMemStatus)
-        {
-            sdbusplus::asio::getProperty<bool>(
-                *crow::connections::systemBus, service, path,
-                "xyz.openbmc_project.State."
-                "Decorator.OperationalStatus",
-                "Functional",
-                [asyncResp](const boost::system::error_code& ec3,
-                            bool dimmState) {
-                if (ec3)
-                {
-                    BMCWEB_LOG_ERROR("DBUS response error {}", ec3);
-                    return;
-                }
-                updateDimmProperties(asyncResp, dimmState);
-            });
-        }
         return;
     }
 
@@ -320,11 +278,6 @@ inline void
                 static_cast<double>(*memorySizeInKB) / (1024 * 1024) +
                 *preValue;
         }
-        if constexpr (bmcwebEnableProcMemStatus)
-        {
-            asyncResp->res.jsonValue["MemorySummary"]["Status"]["State"] =
-                "Enabled";
-        }
     }
 }
 
@@ -353,7 +306,7 @@ inline void
             messages::internalError(asyncResp->res);
             return;
         }
-        processMemoryProperties(asyncResp, service, path, properties);
+        processMemoryProperties(asyncResp, properties);
     });
 }
 
@@ -472,7 +425,6 @@ inline void
 
 inline void afterSystemGetSubTree(
     const std::shared_ptr<bmcweb::AsyncResp>& asyncResp,
-    const std::shared_ptr<HealthPopulate>& systemHealth,
     const boost::system::error_code& ec,
     const dbus::utility::MapperGetSubTreeResponse& subtree)
 {
@@ -497,24 +449,6 @@ inline void afterSystemGetSubTree(
             continue;
         }
 
-        std::shared_ptr<HealthPopulate> memoryHealth = nullptr;
-        std::shared_ptr<HealthPopulate> cpuHealth = nullptr;
-
-        if constexpr (bmcwebEnableProcMemStatus)
-        {
-            memoryHealth = std::make_shared<HealthPopulate>(
-                asyncResp, "/MemorySummary/Status"_json_pointer);
-            systemHealth->children.emplace_back(memoryHealth);
-
-            if constexpr (bmcwebEnableHealthPopulate)
-            {
-                cpuHealth = std::make_shared<HealthPopulate>(
-                    asyncResp, "/ProcessorSummary/Status"_json_pointer);
-
-                systemHealth->children.emplace_back(cpuHealth);
-            }
-        }
-
         // This is not system, so check if it's cpu, dimm, UUID or
         // BiosVer
         for (const auto& connection : connectionNames)
@@ -526,11 +460,6 @@ inline void afterSystemGetSubTree(
                     BMCWEB_LOG_DEBUG("Found Dimm, now get its properties.");
 
                     getMemorySummary(asyncResp, connection.first, path);
-
-                    if constexpr (bmcwebEnableProcMemStatus)
-                    {
-                        memoryHealth->inventory.emplace_back(path);
-                    }
                 }
                 else if (interfaceName ==
                          "xyz.openbmc_project.Inventory.Item.Cpu")
@@ -538,11 +467,6 @@ inline void afterSystemGetSubTree(
                     BMCWEB_LOG_DEBUG("Found Cpu, now get its properties.");
 
                     getProcessorSummary(asyncResp, connection.first, path);
-
-                    if constexpr (bmcwebEnableProcMemStatus)
-                    {
-                        cpuHealth->inventory.emplace_back(path);
-                    }
                 }
                 else if (interfaceName == "xyz.openbmc_project.Common.UUID")
                 {
@@ -585,13 +509,11 @@ inline void afterSystemGetSubTree(
  * @brief Retrieves computer system properties over dbus
  *
  * @param[in] asyncResp Shared pointer for completing asynchronous calls
- * @param[in] systemHealth  Shared HealthPopulate pointer
  *
  * @return None.
  */
 inline void
-    getComputerSystem(const std::shared_ptr<bmcweb::AsyncResp>& asyncResp,
-                      const std::shared_ptr<HealthPopulate>& systemHealth)
+    getComputerSystem(const std::shared_ptr<bmcweb::AsyncResp>& asyncResp)
 {
     BMCWEB_LOG_DEBUG("Get available system components.");
     constexpr std::array<std::string_view, 5> interfaces = {
@@ -603,7 +525,7 @@ inline void
     };
     dbus::utility::getSubTree(
         "/xyz/openbmc_project/inventory", 0, interfaces,
-        std::bind_front(afterSystemGetSubTree, asyncResp, systemHealth));
+        std::bind_front(afterSystemGetSubTree, asyncResp));
 }
 
 /**
@@ -3322,13 +3244,6 @@ inline void
     asyncResp->res.jsonValue["SystemType"] = "Physical";
     asyncResp->res.jsonValue["Description"] = "Computer System";
     asyncResp->res.jsonValue["ProcessorSummary"]["Count"] = 0;
-    if constexpr (bmcwebEnableProcMemStatus)
-    {
-        asyncResp->res.jsonValue["ProcessorSummary"]["Status"]["State"] =
-            "Disabled";
-        asyncResp->res.jsonValue["MemorySummary"]["Status"]["State"] =
-            "Disabled";
-    }
     asyncResp->res.jsonValue["MemorySummary"]["TotalSystemMemoryGiB"] =
         double(0);
     asyncResp->res.jsonValue["@odata.id"] = "/redfish/v1/Systems/system";
@@ -3380,30 +3295,6 @@ inline void
 
 #endif // BMCWEB_ENABLE_KVM
 
-    auto health = std::make_shared<HealthPopulate>(asyncResp);
-    if constexpr (bmcwebEnableHealthPopulate)
-    {
-        constexpr std::array<std::string_view, 4> inventoryForSystems{
-            "xyz.openbmc_project.Inventory.Item.Dimm",
-            "xyz.openbmc_project.Inventory.Item.Cpu",
-            "xyz.openbmc_project.Inventory.Item.Drive",
-            "xyz.openbmc_project.Inventory.Item.StorageController"};
-
-        dbus::utility::getSubTreePaths(
-            "/", 0, inventoryForSystems,
-            [health](const boost::system::error_code& ec,
-                     const std::vector<std::string>& resp) {
-            if (ec)
-            {
-                // no inventory
-                return;
-            }
-
-            health->inventory = resp;
-        });
-        health->populate();
-    }
-
     getMainChassisId(asyncResp,
                      [](const std::string& chassisId,
                         const std::shared_ptr<bmcweb::AsyncResp>& aRsp) {
@@ -3417,7 +3308,7 @@ inline void
     getSystemLocationIndicatorActive(asyncResp);
     // TODO (Gunnar): Remove IndicatorLED after enough time has passed
     getIndicatorLedState(asyncResp);
-    getComputerSystem(asyncResp, health);
+    getComputerSystem(asyncResp);
     getHostState(asyncResp);
     getBootProperties(asyncResp);
     getBootProgress(asyncResp);
