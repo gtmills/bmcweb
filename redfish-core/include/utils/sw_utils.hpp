@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <array>
+#include <memory>
 #include <ranges>
 #include <string>
 #include <string_view>
@@ -280,6 +281,62 @@ inline std::string getRedfishSwHealth(const std::string& swState)
     }
     BMCWEB_LOG_DEBUG("Sw state {} to Warning", swState);
     return "Warning";
+}
+
+/**
+ * @brief Put LowestSupportedVersion of input swId into json response
+ *
+ * This function will put the MinimumVersion from D-Bus of the input
+ * software id to ["LowestSupportedVersion"].
+ *
+ * @param[i,o] asyncResp    Async response object
+ * @param[i]   swId     The software ID to get status for
+ * @param[i]   dbusSvc  The dbus service implementing the software object
+ *
+ * @return void
+ */
+inline void
+    getSwMinimumVersion(const std::shared_ptr<bmcweb::AsyncResp>& asyncResp,
+                        const std::shared_ptr<std::string>& swId,
+                        const std::string& dbusSvc)
+{
+    BMCWEB_LOG_DEBUG("getSwMinimumVersion: swId {} svc {}", *swId, dbusSvc);
+
+    sdbusplus::asio::getAllProperties(
+        *crow::connections::systemBus, dbusSvc,
+        "/xyz/openbmc_project/software/" + *swId,
+        "xyz.openbmc_project.Software.MinimumVersion",
+        [asyncResp](const boost::system::error_code& ec,
+                    const dbus::utility::DBusPropertiesMap& propertiesList) {
+        if (ec)
+        {
+            // not all software has this interface, this is ok
+            return;
+        }
+
+        const std::string* swMinimumVersion = nullptr;
+
+        const bool success = sdbusplus::unpackPropertiesNoThrow(
+            dbus_utils::UnpackErrorPrinter(), propertiesList, "MinimumVersion",
+            swMinimumVersion);
+
+        if (!success)
+        {
+            messages::internalError(asyncResp->res);
+            return;
+        }
+
+        if (swMinimumVersion == nullptr)
+        {
+            messages::internalError(asyncResp->res);
+            return;
+        }
+
+        BMCWEB_LOG_DEBUG("getSwMinimumVersion: MinimumVersion {}",
+                         *swMinimumVersion);
+
+        asyncResp->res.jsonValue["LowestSupportedVersion"] = *swMinimumVersion;
+    });
 }
 
 /**
