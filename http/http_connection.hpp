@@ -76,7 +76,7 @@ class Connection :
 
         connectionCount++;
 
-        BMCWEB_LOG_DEBUG << this << " Connection open, total "
+        BMCWEB_LOG_ERROR << this << " Connection open, total "
                          << connectionCount;
     }
 
@@ -86,7 +86,7 @@ class Connection :
         cancelDeadlineTimer();
 
         connectionCount--;
-        BMCWEB_LOG_DEBUG << this << " Connection closed, total "
+        BMCWEB_LOG_ERROR << this << " Connection closed, total "
                          << connectionCount;
     }
 
