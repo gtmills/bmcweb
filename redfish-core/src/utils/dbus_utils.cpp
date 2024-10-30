@@ -74,7 +74,8 @@ void afterSetProperty(const std::shared_ptr<bmcweb::AsyncResp>& asyncResp,
             }
             if (errorName == "xyz.openbmc_project.Common.Error.Unavailable")
             {
-                messages::resourceInStandby(asyncResp->res);
+                messages::propertyValueExternalConflict(
+                    asyncResp->res, redfishPropertyName, propertyValue);
                 return;
             }
         }
