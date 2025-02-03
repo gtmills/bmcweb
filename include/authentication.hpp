@@ -122,27 +122,34 @@ inline std::shared_ptr<persistent_data::UserSession>
     using headers = boost::beast::http::header<true>;
     std::pair<headers::const_iterator, headers::const_iterator> cookies =
         reqHeader.equal_range(boost::beast::http::field::cookie);
-
+        std::string_view authKey;
     for (auto it = cookies.first; it != cookies.second; it++)
     {
-        std::string_view cookieValue = it->value();
-        BMCWEB_LOG_DEBUG("Checking cookie {}", cookieValue);
-        auto startIndex = cookieValue.find("SESSION=");
-        if (startIndex == std::string::npos)
+        // 
+        std::string_view cookieValue = {";" + it->value()};
+
+        BMCWEB_LOG_ERROR("Checking cookie {}", cookieValue);
+        for (const auto& param :
+             boost::beast::http::param_list{cookieValue})
         {
-            BMCWEB_LOG_DEBUG(
+       // BMCWEB_LOG_ERROR("Checking param {}", param);
+       // BMCWEB_LOG_ERROR("Checking {}", param.second);
+  //  BMCWEB_LOG_ERROR("Cookie {} has value {} ", param.first, param.second);
+            if (param.first != "SESSION" || param.second.empty())
+            {
+                continue;
+            }
+            authKey = param.second;
+        BMCWEB_LOG_ERROR("authKey set {}", authKey );
+            break;
+        }
+        if (authKey.empty())
+        {
+            BMCWEB_LOG_ERROR(
                 "Cookie was present, but didn't look like a session {}",
                 cookieValue);
             continue;
         }
-        startIndex += sizeof("SESSION=") - 1;
-        auto endIndex = cookieValue.find(';', startIndex);
-        if (endIndex == std::string::npos)
-        {
-            endIndex = cookieValue.size();
-        }
-        std::string_view authKey =
-            cookieValue.substr(startIndex, endIndex - startIndex);
 
         std::shared_ptr<persistent_data::UserSession> sessionOut =
             persistent_data::SessionStore::getInstance().loginSessionByToken(
