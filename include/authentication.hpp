@@ -11,6 +11,7 @@
 #include <boost/container/flat_set.hpp>
 
 #include <random>
+#include <ranges>
 #include <utility>
 
 namespace crow
@@ -126,23 +127,43 @@ inline std::shared_ptr<persistent_data::UserSession>
     for (auto it = cookies.first; it != cookies.second; it++)
     {
         std::string_view cookieValue = it->value();
+        std::string_view authKey;
         BMCWEB_LOG_DEBUG("Checking cookie {}", cookieValue);
-        auto startIndex = cookieValue.find("SESSION=");
-        if (startIndex == std::string::npos)
+
+     for (string_view cookie : std::views::split(cookieValue, ";")) {
+//BMCWEB_LOG_ERROR("Checking cookie {}", std::string_view(param));
+      // std::string_view cookie = param;
+       if (cookie.empty())
+       {
+          continue;
+       }
+       std::string_view key = "SESSION=";
+       if (!cookie.starts_with(key))
+       {
+          continue;
+       }
+         
+       authKey = cookie.remove_prefix(key.size());
+
+
+       }
+//        BMCWEB_LOG_DEBUG("Checking cookie {}", cookieValue);
+ //       auto startIndex = cookieValue.find("SESSION=");
+        if (authKey.empty())
         {
             BMCWEB_LOG_DEBUG(
                 "Cookie was present, but didn't look like a session {}",
                 cookieValue);
             continue;
         }
-        startIndex += sizeof("SESSION=") - 1;
-        auto endIndex = cookieValue.find(';', startIndex);
-        if (endIndex == std::string::npos)
-        {
-            endIndex = cookieValue.size();
-        }
-        std::string_view authKey =
-            cookieValue.substr(startIndex, endIndex - startIndex);
+      //  startIndex += sizeof("SESSION=") - 1;
+       // auto endIndex = cookieValue.find(';', startIndex);
+       //  if (endIndex == std::string::npos)
+       // {
+        //    endIndex = cookieValue.size();
+       // }
+       // std::string_view authKey =
+         //   cookieValue.substr(startIndex, endIndex - startIndex);
 
         std::shared_ptr<persistent_data::UserSession> sessionOut =
             persistent_data::SessionStore::getInstance().loginSessionByToken(
