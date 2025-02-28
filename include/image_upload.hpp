@@ -103,6 +103,7 @@ inline void
                                     std::ofstream::trunc);
     out << req.body();
     out.close();
+    req.body().clear();
     timeout.async_wait(timeoutHandler);
 }
 
