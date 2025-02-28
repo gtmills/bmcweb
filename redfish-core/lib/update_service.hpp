@@ -868,8 +868,15 @@ inline void updateMultipartContext(
 
     setApplyTime(asyncResp, *applyTime);
 
-    // Setup callback for when new software detected
-    monitorForSoftwareAvailable(asyncResp, req, "/redfish/v1/UpdateService");
+    // Only allow 1 code update
+    if (fwUpdateInProgress)
+    {
+        if (asyncResp)
+        {
+            messages::serviceTemporarilyUnavailable(asyncResp->res, "30");
+        }
+        return;
+    }
 
     uploadImageFile(asyncResp->res, *uploadData);
 }
@@ -890,8 +897,15 @@ inline void handleUpdateServicePost(
     // multipart/form-data
     if (bmcweb::asciiIEquals(contentType, "application/octet-stream"))
     {
-        // Setup callback for when new software detected
-        monitorForSoftwareAvailable(asyncResp, req, url);
+        // Only allow 1 code update
+        if (fwUpdateInProgress)
+        {
+            if (asyncResp)
+            {
+                messages::serviceTemporarilyUnavailable(asyncResp->res, "30");
+            }
+            return;
+        }
 
         uploadImageFile(asyncResp->res, req.body());
     }
