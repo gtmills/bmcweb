@@ -75,6 +75,12 @@ inline void doPowerSupplyCollection(
 {
     if (ec)
     {
+        if (ec.value() == boost::system::errc::io_error)
+        {
+            BMCWEB_LOG_WARNING("Chassis not found");
+            messages::resourceNotFound(asyncResp->res, "Chassis", chassisId);
+            return;
+        }
         if (ec.value() != EBADR)
         {
             BMCWEB_LOG_ERROR("DBUS response error{}", ec.value());
@@ -114,6 +120,7 @@ inline void handlePowerSupplyCollectionHead(
          chassisId](const std::optional<std::string>& validChassisPath) {
             if (!validChassisPath)
             {
+                BMCWEB_LOG_WARNING("Chassis not found");
                 messages::resourceNotFound(asyncResp->res, "Chassis",
                                            chassisId);
                 return;
@@ -168,11 +175,19 @@ inline void afterGetValidPowerSupplyPath(
 {
     if (ec)
     {
+        if (ec.value() == boost::system::errc::io_error)
+        {
+            // Not found
+            callback(std::string(), std::string());
+            return;
+        }
         if (ec.value() != EBADR)
         {
             BMCWEB_LOG_ERROR("DBUS response error{}", ec.value());
             messages::internalError(asyncResp->res);
+            return;
         }
+        callback(std::string(), std::string());
         return;
     }
     for (const auto& [objectPath, service] : subtree)
@@ -468,6 +483,14 @@ inline void doPowerSupplyGet(
     const std::string& chassisId, const std::string& powerSupplyId,
     const std::string& powerSupplyPath, const std::string& service)
 {
+    if (powerSupplyPath.empty() || service.empty())
+    {
+        BMCWEB_LOG_WARNING("PowerSupply not found");
+        messages::resourceNotFound(asyncResp->res, "PowerSupply",
+                                   powerSupplyId);
+        return;
+    }
+
     asyncResp->res.addHeader(
         boost::beast::http::field::link,
         "</redfish/v1/JsonSchemas/PowerSupply/PowerSupply.json>; rel=describedby");
@@ -505,7 +528,15 @@ inline void handlePowerSupplyHead(
     // Get the correct Path and Service that match the input parameters
     getValidPowerSupplyPath(
         asyncResp, chassisId, powerSupplyId,
-        [asyncResp](const std::string&, const std::string&) {
+        [asyncResp, powerSupplyId](const std::string& powerSupplyPath,
+                                   const std::string& service) {
+            if (powerSupplyPath.empty() || service.empty())
+            {
+                BMCWEB_LOG_WARNING("PowerSupply not found");
+                messages::resourceNotFound(asyncResp->res, "PowerSupply",
+                                           powerSupplyId);
+                return;
+            }
             asyncResp->res.addHeader(
                 boost::beast::http::field::link,
                 "</redfish/v1/JsonSchemas/PowerSupply/PowerSupply.json>; rel=describedby");
