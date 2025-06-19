@@ -1,22 +1,50 @@
 #pragma once
 
+#include "app.hpp"
+// NOLINTBEGIN(misc-include-cleaner)
+#include "dbus_singleton.hpp"
+#include "dbus_utility.hpp"
+#include "http_request.hpp"
+#include "http_response.hpp"
+#include "http_stream.hpp"
+#include "ibm/utils.hpp"
+#include "io_context_singleton.hpp"
+#include "logging.hpp"
+#include "privileges.hpp"
+#include "registries/privilege_registry.hpp"
+
+#include <asm-generic/errno.h>
 #include <sys/select.h>
 
 #include <boost/asio.hpp>
 #include <boost/asio/basic_socket_acceptor.hpp>
 #include <boost/asio/basic_stream_socket.hpp>
+#include <boost/asio/error.hpp>
+#include <boost/asio/io_context.hpp>
 #include <boost/asio/local/stream_protocol.hpp>
 #include <boost/beast/core/flat_static_buffer.hpp>
 #include <boost/beast/http.hpp>
+#include <boost/beast/http/status.hpp>
+#include <boost/beast/http/verb.hpp>
+#include <boost/container/flat_map.hpp>
 #include <boost/shared_ptr.hpp>
 #include <boost/system/error_code.hpp>
-#include <http_stream.hpp>
-#include <ibm/utils.hpp>
+#include <sdbusplus/asio/property.hpp>
 
+#include <chrono>
 #include <cstddef>
+#include <cstdint>
+#include <cstdio>
+#include <exception>
 #include <filesystem>
+#include <format>
+#include <memory>
 #include <random>
 #include <string>
+#include <string_view>
+#include <system_error>
+#include <variant>
+// NOLINTEND(misc-include-cleaner)
 
 namespace crow
 {
@@ -75,11 +103,13 @@ class Handler : public std::enable_shared_from_this<Handler>
                     if (ec == boost::system::errc::no_such_file_or_directory ||
                         ec == boost::system::errc::connection_refused)
                     {
-                        BMCWEB_LOG_DEBUG("UNIX Socket: async_connect {}", ec);
+                        BMCWEB_LOG_DEBUG("UNIX Socket: async_connect {}",
+                                         ec.message());
                         retrySocketConnect();
                         return;
                     }
-                    BMCWEB_LOG_ERROR("UNIX Socket: async_connect error {}", ec);
+                    BMCWEB_LOG_ERROR("UNIX Socket: async_connect error {}",
+                                     ec.message());
                     waitTimer.cancel();
                     this->connection->sendStreamErrorStatus(
                         boost::beast::http::status::internal_server_error);
@@ -116,7 +146,8 @@ class Handler : public std::enable_shared_from_this<Handler>
                     }
                     else
                     {
-                        BMCWEB_LOG_ERROR("DBUS response error: {}", ec);
+                        BMCWEB_LOG_ERROR("DBUS response error: {}",
+                                         ec.message());
                         this->connection->sendStreamErrorStatus(
                             boost::beast::http::status::internal_server_error);
                     }
@@ -143,14 +174,15 @@ class Handler : public std::enable_shared_from_this<Handler>
                                  const boost::system::error_code& ec) {
             if (ec)
             {
-                BMCWEB_LOG_ERROR("Async_wait failed {}", ec);
+                BMCWEB_LOG_ERROR("Async_wait failed {}", ec.message());
                 return;
             }
 
             if (connectRetryCount < maxConnectRetryCount)
             {
-                BMCWEB_LOG_ERROR("Failed to connect, retrying...",
-                                 connectRetryCount);
+                BMCWEB_LOG_ERROR(
+                    "Failed to connect, retrying... Retry count: {}",
+                    connectRetryCount);
                 connectRetryCount++;
                 doConnect();
             }
@@ -218,6 +250,7 @@ class Handler : public std::enable_shared_from_this<Handler>
         }
     }
 
+    // NOLINTNEXTLINE
     void getDumpSize(const std::string& dumpEntryID,
                      const std::string& dumpEntryType)
     {
@@ -239,7 +272,7 @@ class Handler : public std::enable_shared_from_this<Handler>
                     {
                         BMCWEB_LOG_ERROR(
                             "DBUS response error: Unable to get the dump size {}",
-                            ec);
+                            ec.message());
                         this->connection->sendStreamErrorStatus(
                             boost::beast::http::status::internal_server_error);
                     }
@@ -274,7 +307,7 @@ class Handler : public std::enable_shared_from_this<Handler>
                     if (ec != boost::asio::error::eof)
                     {
                         BMCWEB_LOG_ERROR("Couldn't read from local peer: {}",
-                                         ec);
+                                         ec.message());
                         this->connection->sendStreamErrorStatus(
                             boost::beast::http::status::internal_server_error);
                         this->connection->close();
@@ -370,7 +403,7 @@ inline void requestRoutesDumpOffload(App& app)
                            pos2 - pos1 - startDelimiter.length());
             std::string dumpType = "system";
 
-	    boost::asio::io_context* ioCon = &getIoContext();
+            boost::asio::io_context* ioCon = &getIoContext();
 
             // Generating random id to create unique socket file
             // for each dump offload request
@@ -379,25 +412,27 @@ inline void requestRoutesDumpOffload(App& app)
             std::uniform_int_distribution<> dist{0, 1024};
             std::string unixSocketPath = std::format(
                 "{}{}_dump_{}", unixSocketPathDir, dumpType, dist(gen));
-	    if (!ioCon)
-	    {
-	        BMCWEB_LOG_ERROR("iocontext is null!");
+            if (!ioCon)
+            {
+                BMCWEB_LOG_ERROR("iocontext is null!");
                 systemHandlers[&conn]->connection->sendStreamErrorStatus(
-                        boost::beast::http::status::internal_server_error);
+                    boost::beast::http::status::internal_server_error);
                 conn.close();
-	    }
-	    try
-	    {
-	        systemHandlers[&conn] = std::make_shared<Handler>(*ioCon, dumpId, dumpType, unixSocketPath);
-	    }
-	    catch (const std::exception& e)
-	    {
-	        BMCWEB_LOG_ERROR("Exception while creating Handler: {}", e.what());
+            }
+            try
+            {
+                systemHandlers[&conn] = std::make_shared<Handler>(
+                    *ioCon, dumpId, dumpType, unixSocketPath);
+            }
+            catch (const std::exception& e)
+            {
+                BMCWEB_LOG_ERROR("Exception while creating Handler: {}",
+                                 e.what());
                 systemHandlers[&conn]->connection->sendStreamErrorStatus(
-                        boost::beast::http::status::internal_server_error);
+                    boost::beast::http::status::internal_server_error);
                 conn.close();
-		return;
-	    }
+                return;
+            }
             systemHandlers[&conn]->connection = &conn;
 
             if (!crow::ibm_utils::createDirectory(unixSocketPathDir))
