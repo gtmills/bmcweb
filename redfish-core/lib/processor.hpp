@@ -296,7 +296,7 @@ inline void getCpuDataByService(
             const dbus::utility::ManagedObjectType& dbusData) {
             if (ec)
             {
-                BMCWEB_LOG_DEBUG("DBUS response error");
+                BMCWEB_LOG_ERROR("DBUS response error, ec:", ec);
                 messages::internalError(asyncResp->res);
                 return;
             }

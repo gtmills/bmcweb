@@ -179,14 +179,20 @@ inline void afterAddLinkToPCIeSlot(
             // This PCIeSlot has no chassis association.
             return;
         }
-        BMCWEB_LOG_ERROR("DBUS response ec={} for slot path={}", ec.value(),
+        BMCWEB_LOG_ERROR("DBUS response ec={} for slot path={}", ec,
                          pcieDeviceSlot);
         messages::internalError(asyncResp->res);
         return;
     }
     if (chassisPaths.size() != 1)
     {
-        BMCWEB_LOG_ERROR("PCIe Slot association error! ");
+        BMCWEB_LOG_ERROR(
+            "Association error for PCIeSlot:{} to chassis error. Its association count:{} is not equal to 1.",
+            pcieDeviceSlot, chassisPaths.size());
+        for (const auto& chassisPath : chassisPaths)
+        {
+            BMCWEB_LOG_ERROR("Invalid chassisPath: {}", chassisPath);
+        }
         messages::internalError(asyncResp->res);
         return;
     }
@@ -390,6 +396,10 @@ inline void getPCIeDeviceSlotPath(
                 BMCWEB_LOG_ERROR(
                     "PCIeDevice {} is associated with more than one PCIeSlot: {}",
                     pcieDevicePath, endpoints.size());
+                for (const std::string& slotPath : endpoints)
+                {
+                    BMCWEB_LOG_ERROR("Invalid PCIeSlotPath: {}", slotPath);
+                }
                 messages::internalError(asyncResp->res);
                 return;
             }
