@@ -207,18 +207,18 @@ RedfishService::RedfishService(App& app)
         requestRoutesDBusEventLogEntryDownloadPelJson(app);
         requestRoutesDBusCELogEntryDownloadPelJson(app);
     }
+    else
+    {
+        requestRoutesJournalEventLogEntryCollection(app);
+        requestRoutesJournalEventLogEntry(app);
+        requestRoutesJournalEventLogClear(app);
+    }
 
     if constexpr (BMCWEB_REDFISH_LICENSE)
     {
         requestRoutesLicenseService(app);
         requestRoutesLicenseEntryCollection(app);
         requestRoutesLicenseEntry(app);
-    }
-    else
-    {
-        requestRoutesJournalEventLogEntryCollection(app);
-        requestRoutesJournalEventLogEntry(app);
-        requestRoutesJournalEventLogClear(app);
     }
 
     if constexpr (BMCWEB_REDFISH_HOST_LOGGER)
