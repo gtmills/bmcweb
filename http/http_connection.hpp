@@ -891,7 +891,13 @@ class Connection :
     void doWrite()
     {
         BMCWEB_LOG_DEBUG("{} doWrite", logPtr(this));
-        res.preparePayload();
+
+        boost::urls::url_view urlView;
+        if (req != nullptr)
+        {
+            urlView = req->url();
+        }
+        res.preparePayload(urlView);
 
         startDeadline();
         if (httpType == HttpType::HTTP)
