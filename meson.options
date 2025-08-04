@@ -489,7 +489,7 @@ option(
 option(
     'http2',
     type: 'feature',
-    value: 'enabled',
+    value: 'disabled',
     description: 'Enable HTTP/2 protocol support using nghttp2.',
 )
 
