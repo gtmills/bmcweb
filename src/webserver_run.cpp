@@ -8,10 +8,10 @@
 #include "dbus_monitor.hpp"
 #include "dbus_singleton.hpp"
 #include "event_service_manager.hpp"
-#include "google/google_service_root.hpp"
+#include "google_service_root.hpp"
 #include "hostname_monitor.hpp"
-#include "ibm/locks.hpp"
-#include "ibm/management_console_rest.hpp"
+#include "ibm_locks.hpp"
+#include "ibm_management_console_rest.hpp"
 #include "image_upload.hpp"
 #include "io_context_singleton.hpp"
 #include "kvm_websocket.hpp"
@@ -89,7 +89,7 @@ int run()
 
     if constexpr (BMCWEB_REDFISH)
     {
-        redfish::RedfishService redfish(app);
+        redfish::RedfishService::getInstance(app);
 
         // Create EventServiceManager instance and initialize Config
         redfish::EventServiceManager::getInstance();

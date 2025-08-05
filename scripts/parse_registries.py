@@ -38,7 +38,9 @@ INCLUDES = """
 
 // clang-format off
 
-namespace redfish::registries::{}
+namespace redfish::registries
+{{
+struct {}
 {{
 """
 
@@ -98,10 +100,12 @@ def update_registries(files: t.List[RegistryInfo]) -> None:
         with open(file, "w") as registry:
             version_split = json_dict["RegistryVersion"].split(".")
 
-            registry.write(REGISTRY_HEADER.format(namespace))
+            struct_name = to_pascal_case(namespace)
+            registry.write(REGISTRY_HEADER.format(struct_name))
             # Parse the Registry header info
+            description = json_dict.get("Description", "")
             registry.write(
-                "const Header header = {{\n"
+                "static constexpr Header header = {{\n"
                 '    "{json_dict[@Redfish.Copyright]}",\n'
                 '    "{json_dict[@odata.type]}",\n'
                 "    {version_split[0]},\n"
@@ -109,18 +113,20 @@ def update_registries(files: t.List[RegistryInfo]) -> None:
                 "    {version_split[2]},\n"
                 '    "{json_dict[Name]}",\n'
                 '    "{json_dict[Language]}",\n'
-                '    "{json_dict[Description]}",\n'
+                '    "{description}",\n'
                 '    "{json_dict[RegistryPrefix]}",\n'
                 '    "{json_dict[OwningEntity]}",\n'
                 "}};\n"
-                "constexpr const char* url =\n"
+                "\n"
+                "static constexpr const char* url =\n"
                 '    "{url}";\n'
                 "\n"
-                "constexpr std::array registry =\n"
+                "static constexpr std::array registry =\n"
                 "{{\n".format(
                     json_dict=json_dict,
                     url=url,
                     version_split=version_split,
+                    description=description,
                 )
             )
 
@@ -157,11 +163,21 @@ def update_registries(files: t.List[RegistryInfo]) -> None:
             for index, (messageId, message) in enumerate(messages_sorted):
                 messageId = messageId[0].lower() + messageId[1:]
                 registry.write("    {} = {},\n".format(messageId, index))
+            registry.write("};\n")
+            registry.write("}}; // struct {}\n".format(namespace))
+            registry.write("\n")
             registry.write(
-                "}};\n}} // namespace redfish::registries::{}\n".format(
-                    namespace
+                "[[gnu::constructor]] inline void register{}()\n".format(
+                    to_pascal_case(namespace)
                 )
             )
+            registry.write(
+                "{{ registerRegistry<{}>(); }}\n".format(
+                    to_pascal_case(namespace)
+                )
+            )
+            registry.write("\n")
+            registry.write("} // namespace redfish::registries\n")
 
 
 def get_privilege_string_from_list(
@@ -228,7 +244,10 @@ def get_response_code(entry_id: str) -> str | None:
         "GenerateSecretKeyRequired": "forbidden",
         "InsufficientPrivilege": "forbidden",
         "InsufficientStorage": "insufficient_storage",
+        "InstallFailed": "internal_server_error",
         "InternalError": "internal_server_error",
+        "InvalidLicense": "bad_request",
+        "LicenseInstalled": "ok",
         "MaximumErrorsExceeded": "internal_server_error",
         "NoValidSession": "forbidden",
         "OperationFailed": "bad_gateway",
@@ -236,7 +255,7 @@ def get_response_code(entry_id: str) -> str | None:
         "OperationTimeout": "internal_server_error",
         "PasswordChangeRequired": None,
         "PreconditionFailed": "precondition_failed",
-        "PropertyNotWritable": "forbidden",
+        "PropertyNotWritable": "method_not_allowed",
         "PropertyValueExternalConflict": "conflict",
         "PropertyValueModified": "ok",
         "PropertyValueResourceConflict": "conflict",
@@ -267,6 +286,7 @@ def make_error_function(
     registry_name: str,
     namespace_name: str,
 ) -> str:
+    struct_name = to_pascal_case(namespace_name)
     arg_nonstring_types = {
         "const boost::urls::url_view_base&": {
             "AccessDenied": [1],
@@ -319,7 +339,7 @@ def make_error_function(
         args.append(f"{typename} arg{arg_index}")
     function_name = entry_id[0].lower() + entry_id[1:]
     arg = ", ".join(args)
-    out += f"nlohmann::json {function_name}({arg})"
+    out += f"nlohmann::json::object_t {function_name}({arg})"
 
     if is_header:
         out += ";\n\n"
@@ -351,9 +371,9 @@ def make_error_function(
                     outargs.append(f"arg{index}")
             argstring = ", ".join(outargs)
             arg_param = f"std::to_array{to_array_type}({{{argstring}}})"
-        out += f"    return getLog(redfish::registries::{namespace_name}::Index::{function_name}, {arg_param});"
+        out += f"    return getLog(redfish::registries::{struct_name}::Index::{function_name}, {arg_param});"
         out += "\n}\n\n"
-    if registry_name == "Base":
+    if registry_name == "Base" or registry_name == "License":
         args.insert(0, "crow::Response& res")
         if entry_id == "InternalError":
             if is_header:
@@ -422,6 +442,7 @@ def create_error_registry(
 ) -> None:
     file, json_dict, namespace, url = registry_info
     base_filename = filename + "_messages"
+    struct_name = to_pascal_case(namespace_name)
 
     error_messages_hpp = os.path.join(
         SCRIPT_DIR, "..", "redfish-core", "include", f"{base_filename}.hpp"
@@ -462,7 +483,7 @@ namespace messages
                 message = message.replace(f"'%{index}'", f"<arg{index}>")
                 message = message.replace(f"%{index}", f"<arg{index}>")
 
-            if registry_name == "Base":
+            if registry_name == "Base" or registry_name == "License":
                 out.write("/**\n")
                 out.write(f"* @brief Formats {entry_id} message into JSON\n")
                 out.write(f'* Message body: "{message}"\n')
@@ -500,7 +521,6 @@ namespace messages
 
         headers.append('"registries.hpp"')
         if registry_name == "Base":
-            reg_name_lower = "base"
             headers.append('"error_message_utils.hpp"')
             headers.append('"http_response.hpp"')
             headers.append('"logging.hpp"')
@@ -508,8 +528,11 @@ namespace messages
             headers.append("<boost/beast/http/status.hpp>")
             headers.append("<boost/url/url_view_base.hpp>")
             headers.append("<source_location>")
-        else:
-            reg_name_lower = namespace_name.lower()
+        elif registry_name == "License":
+            headers.append('"error_message_utils.hpp"')
+            headers.append('"http_response.hpp"')
+            headers.append("<boost/beast/http/status.hpp>")
+        reg_name_lower = namespace_name.lower()
         headers.append(f'"registries/{reg_name_lower}_message_registry.hpp"')
 
         headers.append("<nlohmann/json.hpp>")
@@ -517,7 +540,7 @@ namespace messages
         headers.append("<cstddef>")
         headers.append("<span>")
 
-        if registry_name not in ("ResourceEvent", "HeartbeatEvent"):
+        if registry_name not in ("ResourceEvent", "HeartbeatEvent", "License"):
             headers.append("<cstdint>")
             headers.append("<string>")
         headers.append("<string_view>")
@@ -541,20 +564,20 @@ namespace messages
         )
         out.write(
             """
-static nlohmann::json getLog(redfish::registries::{namespace_name}::Index name,
+static nlohmann::json::object_t getLog(redfish::registries::{struct_name}::Index name,
                              std::span<const std::string_view> args)
 {{
     size_t index = static_cast<size_t>(name);
-    if (index >= redfish::registries::{namespace_name}::registry.size())
+    if (index >= redfish::registries::{struct_name}::registry.size())
     {{
         return {{}};
     }}
-    return getLogFromRegistry(redfish::registries::{namespace_name}::header,
-                              redfish::registries::{namespace_name}::registry, index, args);
+    return getLogFromRegistry(redfish::registries::{struct_name}::header,
+                              redfish::registries::{struct_name}::registry, index, args);
 }}
 
 """.format(
-                namespace_name=namespace_name
+                struct_name=struct_name
             )
         )
         for entry_id, entry in messages.items():
@@ -728,6 +751,13 @@ def main() -> None:
             "HeartbeatEvent",
             "heartbeat_event",
             "heartbeat",
+        )
+    if "license" in registries_map:
+        create_error_registry(
+            registries_map["license"],
+            "License",
+            "license",
+            "license",
         )
     if "resource_event" in registries_map:
         create_error_registry(

@@ -1,4 +1,3 @@
-
 #include "oem_messages.hpp"
 
 #include "bmcweb_config.h"
@@ -32,11 +31,11 @@ namespace messages
  */
 
 // Additional OEM taskAborted
-nlohmann::json taskAborted(const std::string& arg1, const std::string& arg2,
-                           const std::string& arg3, const std::string& arg4)
+nlohmann::json::object_t taskAborted(
+    const std::string& arg1, const std::string& arg2, const std::string& arg3,
+    const std::string& arg4)
 {
-    const redfish::registries::Header& header =
-        redfish::registries::task_event::header;
+    const registries::Header& header = redfish::registries::TaskEvent::header;
 
     std::string msgId;
     std::string_view msgName = "TaskAborted";
@@ -51,7 +50,8 @@ nlohmann::json taskAborted(const std::string& arg1, const std::string& arg2,
         msgId = std::format("{}.{}.{}.{}", header.registryPrefix,
                             header.versionMajor, header.versionMinor, msgName);
     }
-    return nlohmann::json{
+
+    return nlohmann::json::object_t{
         {"@odata.type", "#Message.v1_0_0.Message"},
         {"MessageId", msgId},
         {"Message", "The task with id " + arg1 + " has been aborted."},

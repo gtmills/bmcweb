@@ -250,7 +250,7 @@ class Connection :
         }
         BMCWEB_LOG_DEBUG("{} SSL handshake succeeded", logPtr(this));
         // If http2 is enabled, negotiate the protocol
-        if constexpr (BMCWEB_EXPERIMENTAL_HTTP2)
+        if constexpr (BMCWEB_HTTP2)
         {
             const unsigned char* alpn = nullptr;
             unsigned int alpnlen = 0;
@@ -324,7 +324,7 @@ class Connection :
                              logPtr(this), isWebsocket, isH2c);
         }
 
-        if (BMCWEB_EXPERIMENTAL_HTTP2 && isH2c)
+        if (BMCWEB_HTTP2 && isH2c)
         {
             std::string_view base64settings = req->req[field::http2_settings];
             if (utility::base64Decode<true>(base64settings, http2settings))
@@ -387,14 +387,16 @@ class Connection :
             return;
         }
         req->session = userSession;
-        accept = req->getHeaderValue("Accept");
+        using boost::beast::http::field;
+        accept = req->getHeaderValue(field::accept);
+        acceptEncoding = req->getHeaderValue(field::accept_encoding);
         // Fetch the client IP address
         req->ipAddress = ip;
 
         // Check for HTTP version 1.1.
         if (req->version() == 11)
         {
-            if (req->getHeaderValue(boost::beast::http::field::host).empty())
+            if (req->getHeaderValue(field::host).empty())
             {
                 res.result(boost::beast::http::status::bad_request);
                 completeRequest(res);
@@ -554,7 +556,7 @@ class Connection :
             }
         }
 
-        completeResponseFields(accept, res);
+        completeResponseFields(accept, acceptEncoding, res);
         res.addHeader(boost::beast::http::field::date, getCachedDateStr());
 
         doWrite();
@@ -686,16 +688,17 @@ class Connection :
             BMCWEB_LOG_ERROR("Parser was unexpectedly null");
             return;
         }
+        auto& parse = *parser;
+        const auto& value = parser->get();
 
         if (authenticationEnabled)
         {
-            boost::beast::http::verb method = parser->get().method();
+            boost::beast::http::verb method = value.method();
             userSession = authentication::authenticate(
-                ip, res, method, parser->get().base(), mtlsSession);
+                ip, res, method, value.base(), mtlsSession);
         }
 
-        std::string_view expect =
-            parser->get()[boost::beast::http::field::expect];
+        std::string_view expect = value[boost::beast::http::field::expect];
         if (bmcweb::asciiIEquals(expect, "100-continue"))
         {
             res.result(boost::beast::http::status::continue_);
@@ -708,9 +711,9 @@ class Connection :
             return;
         }
 
-        parser->body_limit(getContentLengthLimit());
+        parse.body_limit(getContentLengthLimit());
 
-        if (parser->is_done())
+        if (parse.is_done())
         {
             handle();
             return;
@@ -807,18 +810,19 @@ class Connection :
         {
             return;
         }
+        auto& parse = *parser;
         startDeadline();
         if (httpType == HttpType::HTTP)
         {
             boost::beast::http::async_read_some(
-                adaptor.next_layer(), buffer, *parser,
+                adaptor.next_layer(), buffer, parse,
                 std::bind_front(&self_type::afterRead, this,
                                 shared_from_this()));
         }
         else
         {
             boost::beast::http::async_read_some(
-                adaptor, buffer, *parser,
+                adaptor, buffer, parse,
                 std::bind_front(&self_type::afterRead, this,
                                 shared_from_this()));
         }
@@ -999,6 +1003,8 @@ class Connection :
     std::shared_ptr<crow::Request> req;
     std::string accept;
     std::string http2settings;
+    std::string acceptEncoding;
+
     crow::Response res;
 
     std::shared_ptr<persistent_data::UserSession> userSession;

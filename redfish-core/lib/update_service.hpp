@@ -355,8 +355,8 @@ inline void createTask(const std::shared_ptr<bmcweb::AsyncResp>& asyncResp,
         "member='PropertiesChanged',path='" +
             objPath.str + "'");
     task->startTimer(std::chrono::minutes(5));
-    task->populateResp(asyncResp->res);
     task->payload.emplace(std::move(payload));
+    task->populateResp(asyncResp->res);
 }
 
 // Note that asyncResp can be either a valid pointer or nullptr. If nullptr
@@ -946,7 +946,8 @@ inline void startUpdate(
     const MemoryFileDescriptor& memfd, const std::string& applyTime,
     const std::string& objectPath, const std::string& serviceName)
 {
-    crow::connections::systemBus->async_method_call(
+    dbus::utility::async_method_call(
+        asyncResp,
         [asyncResp, payload = std::move(payload),
          objectPath](const boost::system::error_code& ec1,
                      const sdbusplus::message::object_path& retPath) mutable {

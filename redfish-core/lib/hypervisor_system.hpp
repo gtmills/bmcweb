@@ -546,7 +546,7 @@ inline void deleteHypervisorIP(
     const std::string& ifaceId, const std::string& protocol,
     const std::shared_ptr<bmcweb::AsyncResp>& asyncResp)
 {
-    crow::connections::systemBus->async_method_call(
+    dbus::utility::async_method_call(
         [asyncResp, ifaceId](const boost::system::error_code& ec) {
             if (ec)
             {
@@ -830,7 +830,7 @@ inline void createHypervisorIP(
     const std::string& protocol,
     const std::shared_ptr<bmcweb::AsyncResp>& asyncResp)
 {
-    crow::connections::systemBus->async_method_call(
+    dbus::utility::async_method_call(
         [asyncResp, ifaceId, address](const boost::system::error_code& ec) {
             if (ec)
             {
@@ -1325,8 +1325,14 @@ inline void handleHypervisorPatchFromIfaceData(
         }
 
         const auto& firstGateway = ipv6StaticDefaultGateways->front();
-        handleHypervisorV6DefaultGatewayPatch(
-            ifaceId, firstGateway.is_null() ? "::" : firstGateway, asyncResp);
+        std::string firstGatewayStr = "::";
+        if (!firstGateway.is_null() &&
+            firstGateway.get_ptr<const std::string*>() != nullptr)
+        {
+            firstGatewayStr = *firstGateway.get_ptr<const std::string*>();
+        }
+        handleHypervisorV6DefaultGatewayPatch(ifaceId, firstGatewayStr,
+                                              asyncResp);
     }
 }
 
@@ -1373,7 +1379,8 @@ inline void handleHypervisorEthernetInterfacePatch(
     const std::string& clientIp = req.session->clientIp;
     getHypervisorIfaceData(
         ifaceId, asyncResp, //
-        [req, clientIp, asyncResp, ifaceId, hostName = std::move(hostName),
+        [req = std::make_shared<crow::Request>(req.copy()), clientIp, asyncResp,
+         ifaceId, hostName = std::move(hostName),
          ipv4StaticAddresses = std::move(ipv4StaticAddresses),
          ipv6StaticAddresses = std::move(ipv6StaticAddresses), ipv4DHCPEnabled,
          ipv6OperatingMode,
@@ -1383,7 +1390,7 @@ inline void handleHypervisorEthernetInterfacePatch(
                                 const std::vector<IPv4AddressData>&,
                                 const std::vector<IPv6AddressData>&) {
             handleHypervisorPatchFromIfaceData(
-                req, clientIp, asyncResp, ifaceId, hostName,
+                *req, clientIp, asyncResp, ifaceId, hostName,
                 ipv4StaticAddresses, ipv6StaticAddresses, ipv4DHCPEnabled,
                 ipv6OperatingMode, ipv6StaticDefaultGateways,
                 ipv6AutoConfigEnabled, success, ethData);

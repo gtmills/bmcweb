@@ -7,7 +7,7 @@
 #include "http_request.hpp"
 #include "http_response.hpp"
 #include "http_stream.hpp"
-#include "ibm/utils.hpp"
+#include "ibm_utils.hpp"
 #include "io_context_singleton.hpp"
 #include "logging.hpp"
 #include "privileges.hpp"
@@ -134,7 +134,7 @@ class Handler : public std::enable_shared_from_this<Handler>
     {
         std::string dumpEntryPath = std::format(
             "/xyz/openbmc_project/dump/{}/entry/{}", dumpType, entryID);
-        crow::connections::systemBus->async_method_call(
+        dbus::utility::async_method_call(
             [this,
              self(shared_from_this())](const boost::system::error_code& ec) {
                 if (ec)

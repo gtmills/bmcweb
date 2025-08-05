@@ -4,7 +4,7 @@
 
 #include "app.hpp"
 #include "async_resp.hpp"
-#include "dbus_singleton.hpp"
+#include "dbus_utility.hpp"
 #include "error_messages.hpp"
 #include "generated/enums/log_service.hpp"
 #include "http_body.hpp"
@@ -120,26 +120,43 @@ static AuditLogParseError fillAuditLogEntryJson(
          {"IPAddress", 5},
          {"Terminal", 6},
          {"Result", 7}});
-    for (const auto& item : auditEntry.items())
+
+    const nlohmann::json::object_t* auditEntryItems =
+        auditEntry.get_ptr<const nlohmann::json::object_t*>();
+
+    for (const auto& item : *auditEntryItems)
     {
-        if (item.key() == "ID")
+        const std::string& itemName = item.first;
+        if (itemName == "ID")
         {
-            logEntryID = item.value();
+            const std::string* idStr =
+                item.second.get_ptr<const std::string*>();
+            if (idStr == nullptr)
+            {
+                BMCWEB_LOG_ERROR("Format error - ID");
+                return AuditLogParseError::parseFailed;
+            }
+            logEntryID = *idStr;
         }
-        else if (item.key() == "EventTimestamp")
+        else if (itemName == "EventTimestamp")
         {
-            uint64_t timestamp = item.value();
-            entryTimeStr = redfish::time_utils::getDateTimeUint(timestamp);
+            const uint64_t* timestamp = item.second.get_ptr<const uint64_t*>();
+            if (timestamp == nullptr)
+            {
+                BMCWEB_LOG_ERROR("Format error - EventTimestamp");
+                return AuditLogParseError::parseFailed;
+            }
+            entryTimeStr = redfish::time_utils::getDateTimeUint(*timestamp);
         }
         else
         {
             /* The rest of the properties either go into the MessageArgs or
              * they are not part of the response.
              */
-            mapEntry = msgArgMap.find(item.key());
+            mapEntry = msgArgMap.find(itemName);
             if (mapEntry != msgArgMap.end())
             {
-                messageArgs[mapEntry->second] = item.value();
+                messageArgs[mapEntry->second] = item.second;
             }
         }
     }
@@ -191,7 +208,7 @@ static AuditLogParseError fillAuditLogEntryJson(
             size_t argPos = msg.find(argStr);
             if (argPos != std::string::npos)
             {
-                msg.replace(argPos, argStr.length(), messageArg);
+                msg.replace(argPos, argStr.length(), to_string(messageArg));
             }
         }
     }
@@ -486,7 +503,7 @@ inline void handleLogServicesAuditLogEntriesCollectionGet(
 
     /* Create unique entry for each entry in log file.
      */
-    crow::connections::systemBus->async_method_call(
+    dbus::utility::async_method_call(
         [asyncResp, skip, top](const boost::system::error_code& ec,
                                const sdbusplus::message::unix_fd& unixfd) {
             if (ec)
@@ -528,7 +545,7 @@ inline void handleLogServicesAuditLogEntryGet(
     }
 
     /* Search for entry matching targetID. */
-    crow::connections::systemBus->async_method_call(
+    dbus::utility::async_method_call(
         [asyncResp, targetID](const boost::system::error_code& ec,
                               const sdbusplus::message::unix_fd& unixfd) {
             if (ec)
@@ -651,7 +668,7 @@ inline void handleFullAuditLogAttachment(
     }
 
     /* Download attachment */
-    crow::connections::systemBus->async_method_call(
+    dbus::utility::async_method_call(
         [asyncResp, entryID](const boost::system::error_code& ec,
                              const sdbusplus::message::unix_fd& unixfd) {
             if (ec)

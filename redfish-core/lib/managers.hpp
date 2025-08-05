@@ -17,13 +17,14 @@
 #include "led.hpp"
 #include "logging.hpp"
 #include "oem/ibm/usb_code_update.hpp"
-#include "openbmc/openbmc_managers.hpp"
 #include "persistent_data.hpp"
 #include "query.hpp"
+#include "redfish.hpp"
 #include "redfish_util.hpp"
 #include "registries/privilege_registry.hpp"
 #include "utils/dbus_utils.hpp"
 #include "utils/json_utils.hpp"
+#include "utils/manager_utils.hpp"
 #include "utils/sw_utils.hpp"
 #include "utils/systemd_utils.hpp"
 #include "utils/time_utils.hpp"
@@ -53,7 +54,6 @@
 #include <string>
 #include <string_view>
 #include <utility>
-#include <vector>
 
 namespace redfish
 {
@@ -267,80 +267,69 @@ inline void requestRoutesManagerResetToDefaultsAction(App& app)
      * BMC code updater factory reset wipes the whole BMC read-write
      * filesystem which includes things like the network settings.
      *
-     * OpenBMC only supports ResetToDefaultsType "ResetAll".
+     * OpenBMC only supports ResetType "ResetAll".
      */
 
     BMCWEB_ROUTE(app,
                  "/redfish/v1/Managers/<str>/Actions/Manager.ResetToDefaults/")
         .privileges(redfish::privileges::postManager)
-        .methods(
-            boost::beast::http::verb::
-                post)([&app](
-                          const crow::Request& req,
-                          const std::shared_ptr<bmcweb::AsyncResp>& asyncResp,
-                          const std::string& managerId) {
-            if (!redfish::setUpRedfishRoute(app, req, asyncResp))
-            {
-                return;
-            }
+        .methods(boost::beast::http::verb::post)(
+            [&app](const crow::Request& req,
+                   const std::shared_ptr<bmcweb::AsyncResp>& asyncResp,
+                   const std::string& managerId) {
+                if (!redfish::setUpRedfishRoute(app, req, asyncResp))
+                {
+                    return;
+                }
 
-            if (managerId != BMCWEB_REDFISH_MANAGER_URI_NAME)
-            {
-                messages::resourceNotFound(asyncResp->res, "Manager",
-                                           managerId);
-                return;
-            }
+                if (managerId != BMCWEB_REDFISH_MANAGER_URI_NAME)
+                {
+                    messages::resourceNotFound(asyncResp->res, "Manager",
+                                               managerId);
+                    return;
+                }
 
-            BMCWEB_LOG_DEBUG("Post ResetToDefaults.");
+                BMCWEB_LOG_DEBUG("Post ResetToDefaults.");
 
-            std::optional<std::string> resetType;
-            std::optional<std::string> resetToDefaultsType;
+                std::optional<std::string> resetType;
 
-            if (!json_util::readJsonAction(                     //
-                    req, asyncResp->res,                        //
-                    "ResetToDefaultsType", resetToDefaultsType, //
-                    "ResetType", resetType                      //
-                    ))
-            {
-                BMCWEB_LOG_DEBUG("Missing property ResetType.");
+                if (!json_util::readJsonAction( //
+                        req, asyncResp->res,    //
+                        "ResetType", resetType  //
+                        ))
+                {
+                    BMCWEB_LOG_DEBUG("Missing property ResetType.");
 
-                messages::actionParameterMissing(
-                    asyncResp->res, "ResetToDefaults", "ResetType");
-                return;
-            }
+                    messages::actionParameterMissing(
+                        asyncResp->res, "ResetToDefaults", "ResetType");
+                    return;
+                }
 
-            if (resetToDefaultsType && !resetType)
-            {
-                BMCWEB_LOG_WARNING(
-                    "Using deprecated ResetToDefaultsType, should be ResetType."
-                    "Support for the ResetToDefaultsType will be dropped in 2Q24");
-                resetType = resetToDefaultsType;
-            }
+                if (resetType != "ResetAll")
+                {
+                    BMCWEB_LOG_DEBUG("Invalid property value for ResetType: {}",
+                                     *resetType);
+                    messages::actionParameterNotSupported(
+                        asyncResp->res, *resetType, "ResetType");
+                    return;
+                }
 
-            if (resetType != "ResetAll")
-            {
-                BMCWEB_LOG_DEBUG("Invalid property value for ResetType: {}",
-                                 *resetType);
-                messages::actionParameterNotSupported(asyncResp->res,
-                                                      *resetType, "ResetType");
-                return;
-            }
-
-            crow::connections::systemBus->async_method_call(
-                [asyncResp](const boost::system::error_code& ec) {
-                    if (ec)
-                    {
-                        BMCWEB_LOG_DEBUG("Failed to ResetToDefaults: {}", ec);
-                        messages::internalError(asyncResp->res);
-                        return;
-                    }
-                    // Factory Reset doesn't actually happen until a reboot
-                    // Can't erase what the BMC is running on
-                    doBMCGracefulRestart(asyncResp);
-                },
-                getBMCUpdateServiceName(), getBMCUpdateServicePath(),
-                "xyz.openbmc_project.Common.FactoryReset", "Reset");
-        });
+                dbus::utility::async_method_call(
+                    [asyncResp](const boost::system::error_code& ec) {
+                        if (ec)
+                        {
+                            BMCWEB_LOG_DEBUG("Failed to ResetToDefaults: {}",
+                                             ec);
+                            messages::internalError(asyncResp->res);
+                            return;
+                        }
+                        // Factory Reset doesn't actually happen until a reboot
+                        // Can't erase what the BMC is running on
+                        doBMCGracefulRestart(asyncResp);
+                    },
+                    getBMCUpdateServiceName(), getBMCUpdateServicePath(),
+                    "xyz.openbmc_project.Common.FactoryReset", "Reset");
+            });
 }
 
 /**
@@ -606,7 +595,7 @@ inline void setDateTime(const std::shared_ptr<bmcweb::AsyncResp>& asyncResp,
     // Set the absolute datetime
     bool relative = false;
     bool interactive = false;
-    crow::connections::systemBus->async_method_call(
+    dbus::utility::async_method_call(
         [asyncResp](const boost::system::error_code& ec,
                     const sdbusplus::message_t& msg) {
             afterSetDateTime(asyncResp, ec, msg);
@@ -858,7 +847,7 @@ inline void requestRoutesManager(App& app)
             asyncResp->res.jsonValue["@odata.id"] = boost::urls::format(
                 "/redfish/v1/Managers/{}", BMCWEB_REDFISH_MANAGER_URI_NAME);
             asyncResp->res.jsonValue["@odata.type"] =
-                "#Manager.v1_14_0.Manager";
+                "#Manager.v1_15_0.Manager";
             asyncResp->res.jsonValue["Id"] = BMCWEB_REDFISH_MANAGER_URI_NAME;
             asyncResp->res.jsonValue["Name"] = "OpenBmc Manager";
             asyncResp->res.jsonValue["Description"] =
@@ -882,14 +871,14 @@ inline void requestRoutesManager(App& app)
                     "/redfish/v1/Managers/{}/EthernetInterfaces",
                     BMCWEB_REDFISH_MANAGER_URI_NAME);
 
+            manager_utils::getServiceIdentification(asyncResp, false);
+
             if constexpr (BMCWEB_VM_NBDPROXY)
             {
                 asyncResp->res.jsonValue["VirtualMedia"]["@odata.id"] =
                     boost::urls::format("/redfish/v1/Managers/{}/VirtualMedia",
                                         BMCWEB_REDFISH_MANAGER_URI_NAME);
             }
-
-            getHandleOemOpenBmc(req, asyncResp, managerId);
 
             // Manager.Reset (an action) can be many values, OpenBMC only
             // supports BMC reboot.
@@ -963,12 +952,6 @@ inline void requestRoutesManager(App& app)
                 "/redfish/v1/Managers/{}/ManagerDiagnosticData",
                 BMCWEB_REDFISH_MANAGER_URI_NAME);
 
-            if constexpr (BMCWEB_REDFISH_OEM_MANAGER_FAN_DATA)
-            {
-                auto pids = std::make_shared<GetPIDValues>(asyncResp);
-                pids->run();
-            }
-
             getMainChassisId(asyncResp, [](const std::string& chassisId,
                                            const std::shared_ptr<
                                                bmcweb::AsyncResp>& aRsp) {
@@ -988,6 +971,8 @@ inline void requestRoutesManager(App& app)
 
             getManagerObject(asyncResp, managerId,
                              std::bind_front(getManagerData, asyncResp));
+
+            RedfishService::getInstance(app).handleSubRoute(req, asyncResp);
         });
 
     BMCWEB_ROUTE(app, "/redfish/v1/Managers/<str>/")
@@ -1017,6 +1002,7 @@ inline void requestRoutesManager(App& app)
                 std::optional<nlohmann::json::object_t> stepwiseControllers;
                 std::optional<std::string> profile;
                 std::optional<bool> usbCodeUpdateEnabled;
+                std::optional<std::string> serviceIdentification;
 
                 if (!json_util::readJsonPatch(                            //
                         req, asyncResp->res,                              //
@@ -1032,51 +1018,11 @@ inline void requestRoutesManager(App& app)
                         "Oem/OpenBmc/Fan/StepwiseControllers",
                         stepwiseControllers,                              //
                         "Oem/IBM/USBCodeUpdateEnabled",
-                        usbCodeUpdateEnabled                              //
+                        usbCodeUpdateEnabled,                             //
+                        "ServiceIdentification", serviceIdentification    //
                         ))
                 {
                     return;
-                }
-
-                if (pidControllers || fanControllers || fanZones ||
-                    stepwiseControllers || profile)
-                {
-                    if constexpr (BMCWEB_REDFISH_OEM_MANAGER_FAN_DATA)
-                    {
-                        std::vector<
-                            std::pair<std::string,
-                                      std::optional<nlohmann::json::object_t>>>
-                            configuration;
-                        if (pidControllers)
-                        {
-                            configuration.emplace_back(
-                                "PidControllers", std::move(pidControllers));
-                        }
-                        if (fanControllers)
-                        {
-                            configuration.emplace_back(
-                                "FanControllers", std::move(fanControllers));
-                        }
-                        if (fanZones)
-                        {
-                            configuration.emplace_back("FanZones",
-                                                       std::move(fanZones));
-                        }
-                        if (stepwiseControllers)
-                        {
-                            configuration.emplace_back(
-                                "StepwiseControllers",
-                                std::move(stepwiseControllers));
-                        }
-                        auto pid = std::make_shared<SetPIDValues>(
-                            asyncResp, std::move(configuration), profile);
-                        pid->run();
-                    }
-                    else
-                    {
-                        messages::propertyUnknown(asyncResp->res, "Oem");
-                        return;
-                    }
                 }
 
                 if (usbCodeUpdateEnabled)
@@ -1108,6 +1054,14 @@ inline void requestRoutesManager(App& app)
                     setLocationIndicatorActiveState(
                         asyncResp, *locationIndicatorActive, managerId);
                 }
+
+                if (serviceIdentification)
+                {
+                    manager_utils::setServiceIdentification(
+                        asyncResp, serviceIdentification.value());
+                }
+
+                RedfishService::getInstance(app).handleSubRoute(req, asyncResp);
             });
 }
 

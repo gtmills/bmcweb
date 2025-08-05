@@ -4,6 +4,7 @@
 #include "bmcweb_config.h"
 
 #include "async_resp.hpp"
+#include "boost_formatters.hpp"
 #include "dbus_singleton.hpp"
 #include "dbus_utility.hpp"
 #include "error_messages.hpp"
@@ -119,7 +120,7 @@ inline void afterGetProperties(
         return;
     }
 
-    if (version == nullptr || version->empty())
+    if (version == nullptr)
     {
         messages::internalError(asyncResp->res);
         return;
@@ -160,6 +161,11 @@ inline void afterGetProperties(
     }
     if (!activeVersionPropName.empty() && runningImage)
     {
+        if (version->empty())
+        {
+            BMCWEB_LOG_INFO("Version is empty for swId: {}", swId);
+            return;
+        }
         asyncResp->res.jsonValue[activeVersionPropName] = *version;
     }
 }

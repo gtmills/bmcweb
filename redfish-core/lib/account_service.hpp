@@ -351,7 +351,10 @@ inline void parseLDAPConfigData(nlohmann::json& jsonResponse,
     nlohmann::json::object_t ldap;
     ldap["ServiceEnabled"] = confData.serviceEnabled;
     nlohmann::json::array_t serviceAddresses;
-    serviceAddresses.emplace_back(confData.uri);
+    if (!confData.uri.empty())
+    {
+        serviceAddresses.emplace_back(confData.uri);
+    }
     ldap["ServiceAddresses"] = std::move(serviceAddresses);
 
     nlohmann::json::object_t authentication;
@@ -364,7 +367,10 @@ inline void parseLDAPConfigData(nlohmann::json& jsonResponse,
     nlohmann::json::object_t ldapService;
     nlohmann::json::object_t searchSettings;
     nlohmann::json::array_t baseDistinguishedNames;
-    baseDistinguishedNames.emplace_back(confData.baseDN);
+    if (!confData.baseDN.empty())
+    {
+        baseDistinguishedNames.emplace_back(confData.baseDN);
+    }
 
     searchSettings["BaseDistinguishedNames"] =
         std::move(baseDistinguishedNames);
@@ -411,7 +417,8 @@ inline void handleRoleMapPatch(
             // delete the existing object
             if (index < roleMapObjData.size())
             {
-                crow::connections::systemBus->async_method_call(
+                dbus::utility::async_method_call(
+                    asyncResp,
                     [asyncResp, roleMapObjData, serverType,
                      index](const boost::system::error_code& ec) {
                         if (ec)
@@ -532,7 +539,8 @@ inline void handleRoleMapPatch(
                 BMCWEB_LOG_DEBUG("Remote Group={},LocalRole={}", *remoteGroup,
                                  *localRole);
 
-                crow::connections::systemBus->async_method_call(
+                dbus::utility::async_method_call(
+                    asyncResp,
                     [asyncResp, serverType, localRole,
                      remoteGroup](const boost::system::error_code& ec) {
                         if (ec)
@@ -1452,7 +1460,7 @@ inline void updateUserProperties(
 inline void uploadACF(const std::shared_ptr<bmcweb::AsyncResp>& asyncResp,
                       const std::vector<uint8_t>& decodedAcf)
 {
-    crow::connections::systemBus->async_method_call(
+    dbus::utility::async_method_call(
         [asyncResp](const boost::system::error_code& ec,
                     const std::tuple<std::vector<uint8_t>, bool, std::string>&
                         messageFDbus) {
@@ -1698,15 +1706,6 @@ inline CertificateMappingAttribute getCertificateMapping(
         case MTLSCommonNameParseMode::UserPrincipalName:
         {
             return CertificateMappingAttribute::UserPrincipalName;
-        }
-        break;
-
-        case MTLSCommonNameParseMode::Meta:
-        {
-            if constexpr (BMCWEB_META_TLS_COMMON_NAME_PARSING)
-            {
-                return CertificateMappingAttribute::CommonName;
-            }
         }
         break;
         default:
@@ -2238,7 +2237,8 @@ inline void processAfterCreateUser(
         tempObjPath /= username;
         const std::string userPath(tempObjPath);
 
-        crow::connections::systemBus->async_method_call(
+        dbus::utility::async_method_call(
+            asyncResp,
             [asyncResp, password](const boost::system::error_code& ec3) {
                 if (ec3)
                 {
@@ -2340,7 +2340,8 @@ inline void processAfterGetAllGroups(
         messages::internalError(asyncResp->res);
         return;
     }
-    crow::connections::systemBus->async_method_call(
+    dbus::utility::async_method_call(
+        asyncResp,
         [asyncResp, username, password](const boost::system::error_code& ec2,
                                         sdbusplus::message_t& m) {
             processAfterCreateUser(asyncResp, username, password, ec2, m);
@@ -2456,7 +2457,7 @@ inline void checkAndAddSecretKeyActions(
     const std::shared_ptr<bmcweb::AsyncResp>& asyncResp,
     const std::string& accountName)
 {
-    crow::connections::systemBus->async_method_call(
+    dbus::utility::async_method_call(
         [asyncResp, accountName](const boost::system::error_code& ec,
                                  const dbus::utility::MapperGetObject&) {
             if (ec)
@@ -2684,7 +2685,7 @@ inline void handleAccountGet(
 
             if (accountName == "service")
             {
-                crow::connections::systemBus->async_method_call(
+                dbus::utility::async_method_call(
                     [asyncResp](const boost::system::error_code& ec2,
                                 const std::tuple<std::vector<uint8_t>, bool,
                                                  std::string>& messageFDbus) {
@@ -2737,7 +2738,8 @@ inline void handleAccountDelete(
         return;
     }
 
-    crow::connections::systemBus->async_method_call(
+    dbus::utility::async_method_call(
+        asyncResp,
         [asyncResp, username](const boost::system::error_code& ec) {
             if (ec)
             {
@@ -2933,7 +2935,8 @@ inline void handleAccountPatch(
                              req.session);
         return;
     }
-    crow::connections::systemBus->async_method_call(
+    dbus::utility::async_method_call(
+        asyncResp,
         [asyncResp, username, password(std::move(password)),
          roleId(std::move(roleId)), enabled, newUser{std::string(*newUserName)},
          locked, userSelf, session = req.session,

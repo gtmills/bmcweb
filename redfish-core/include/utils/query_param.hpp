@@ -14,7 +14,10 @@
 #include "http_response.hpp"
 #include "json_formatters.hpp"
 #include "logging.hpp"
+#include "redfishoemrule.hpp"
 #include "str_utility.hpp"
+#include "sub_request.hpp"
+#include "utils/json_utils.hpp"
 
 #include <unistd.h>
 
@@ -763,7 +766,11 @@ class MultiAsyncResp : public std::enable_shared_from_this<MultiAsyncResp>
     // class manages the final "merge" of the json resources.
     MultiAsyncResp(crow::App& appIn,
                    std::shared_ptr<bmcweb::AsyncResp> finalResIn) :
-        app(appIn), finalRes(std::move(finalResIn))
+        app(&appIn), finalRes(std::move(finalResIn))
+    {}
+
+    explicit MultiAsyncResp(std::shared_ptr<bmcweb::AsyncResp> finalResIn) :
+        app(nullptr), finalRes(std::move(finalResIn))
     {}
 
     void addAwaitingResponse(
@@ -779,17 +786,20 @@ class MultiAsyncResp : public std::enable_shared_from_this<MultiAsyncResp>
     {
         BMCWEB_LOG_DEBUG("placeResult for {}", locationToPlace);
         propogateError(finalRes->res, res);
-        if (!res.jsonValue.is_object() || res.jsonValue.empty())
+        nlohmann::json::object_t* obj =
+            res.jsonValue.get_ptr<nlohmann::json::object_t*>();
+        if (obj == nullptr || res.jsonValue.empty())
         {
             return;
         }
         nlohmann::json& finalObj = finalRes->res.jsonValue[locationToPlace];
-        finalObj = std::move(res.jsonValue);
+        finalObj = std::move(*obj);
     }
 
     // Handles the very first level of Expand, and starts a chain of sub-queries
     // for deeper levels.
-    void startQuery(const Query& query, const Query& delegated)
+    void startQuery(const Query& query, const Query& delegated,
+                    const crow::Request& req)
     {
         std::vector<ExpandNode> nodes = findNavigationReferences(
             query.expandType, query.expandLevel, delegated.expandLevel,
@@ -816,12 +826,56 @@ class MultiAsyncResp : public std::enable_shared_from_this<MultiAsyncResp>
                 return;
             }
 
+            if (req.session == nullptr)
+            {
+                BMCWEB_LOG_ERROR("Session is null");
+                messages::internalError(finalRes->res);
+                return;
+            }
+            // Share the session from the original request
+            newReq->session = req.session;
+
             auto asyncResp = std::make_shared<bmcweb::AsyncResp>();
             BMCWEB_LOG_DEBUG("setting completion handler on {}",
                              logPtr(&asyncResp->res));
 
             addAwaitingResponse(asyncResp, node.location);
-            app.handle(newReq, asyncResp);
+            if (app != nullptr)
+            {
+                app->handle(newReq, asyncResp);
+            }
+        }
+    }
+
+    static void startMultiFragmentHandle(
+        const std::shared_ptr<redfish::SubRequest>& req,
+        const std::shared_ptr<bmcweb::AsyncResp>& asyncResp,
+        const std::shared_ptr<std::vector<OemBaseRule*>>& fragments,
+        const std::shared_ptr<std::vector<std::string>>& params,
+        const crow::Response& resIn)
+    {
+        asyncResp->res.jsonValue = resIn.jsonValue;
+        auto multi = std::make_shared<MultiAsyncResp>(asyncResp);
+        for (OemBaseRule* fragment : *fragments)
+        {
+            if (fragment != nullptr)
+            {
+                OemBaseRule& fragmentRule = *fragment;
+                auto rsp = std::make_shared<bmcweb::AsyncResp>();
+                BMCWEB_LOG_DEBUG("Matched fragment rule '{}' method '{}'",
+                                 fragmentRule.rule,
+                                 boost::beast::http::to_string(req->method()));
+                BMCWEB_LOG_DEBUG(
+                    "Handling fragment rules: setting completion handler on {}",
+                    logPtr(&rsp->res));
+                std::optional<nlohmann::json::json_pointer> jsonFragmentPtr =
+                    json_util::createJsonPointerFromFragment(fragmentRule.rule);
+                if (jsonFragmentPtr)
+                {
+                    multi->addAwaitingResponse(rsp, *jsonFragmentPtr);
+                    fragmentRule.handle(*req, rsp, *params);
+                }
+            }
         }
     }
 
@@ -834,7 +888,7 @@ class MultiAsyncResp : public std::enable_shared_from_this<MultiAsyncResp>
         multi->placeResult(locationToPlace, res);
     }
 
-    crow::App& app;
+    crow::App* app;
     std::shared_ptr<bmcweb::AsyncResp> finalRes;
 };
 
@@ -899,19 +953,19 @@ inline void recursiveSelect(nlohmann::json& currRoot,
     if (object != nullptr)
     {
         BMCWEB_LOG_DEBUG("Current JSON is an object");
-        auto it = currRoot.begin();
-        while (it != currRoot.end())
+        auto it = object->begin();
+        while (it != object->end())
         {
             auto nextIt = std::next(it);
-            BMCWEB_LOG_DEBUG("key={}", it.key());
-            const SelectTrieNode* nextNode = currNode.find(it.key());
+            BMCWEB_LOG_DEBUG("key={}", it->first);
+            const SelectTrieNode* nextNode = currNode.find(it->first);
             // Per the Redfish spec section 7.3.3, the service shall select
             // certain properties as if $select was omitted. This applies to
             // every TrieNode that contains leaves and the root.
             constexpr std::array<std::string_view, 5> reservedProperties = {
                 "@odata.id", "@odata.type", "@odata.context", "@odata.etag",
                 "error"};
-            bool reserved = std::ranges::find(reservedProperties, it.key()) !=
+            bool reserved = std::ranges::find(reservedProperties, it->first) !=
                             reservedProperties.end();
             if (reserved || (nextNode != nullptr && nextNode->isSelected()))
             {
@@ -920,13 +974,13 @@ inline void recursiveSelect(nlohmann::json& currRoot,
             }
             if (nextNode != nullptr)
             {
-                BMCWEB_LOG_DEBUG("Recursively select: {}", it.key());
-                recursiveSelect(*it, *nextNode);
+                BMCWEB_LOG_DEBUG("Recursively select: {}", it->first);
+                recursiveSelect(it->second, *nextNode);
                 it = nextIt;
                 continue;
             }
-            BMCWEB_LOG_DEBUG("{} is getting removed!", it.key());
-            it = currRoot.erase(it);
+            BMCWEB_LOG_DEBUG("{} is getting removed!", it->first);
+            it = object->erase(it);
         }
     }
     nlohmann::json::array_t* array =
@@ -958,7 +1012,7 @@ inline void processSelect(crow::Response& intermediateResponse,
 inline void processAllParams(
     crow::App& app, const Query& query, const Query& delegated,
     std::function<void(crow::Response&)>& completionHandler,
-    crow::Response& intermediateResponse)
+    crow::Response& intermediateResponse, const crow::Request& req)
 {
     if (!completionHandler)
     {
@@ -994,7 +1048,7 @@ inline void processAllParams(
 
         asyncResp->res.setCompleteRequestHandler(std::move(completionHandler));
         auto multi = std::make_shared<MultiAsyncResp>(app, asyncResp);
-        multi->startQuery(query, delegated);
+        multi->startQuery(query, delegated, req);
         return;
     }
 

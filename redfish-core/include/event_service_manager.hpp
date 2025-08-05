@@ -30,15 +30,12 @@
 #include <cstdint>
 #include <cstdlib>
 #include <ctime>
-#include <filesystem>
 #include <format>
-#include <fstream>
 #include <memory>
 #include <optional>
 #include <random>
 #include <string>
 #include <string_view>
-#include <system_error>
 #include <utility>
 #include <vector>
 
@@ -47,9 +44,6 @@ namespace redfish
 
 static constexpr const char* eventFormatType = "Event";
 static constexpr const char* metricReportFormatType = "MetricReport";
-
-static constexpr const char* eventServiceFile =
-    "/var/lib/bmcweb/eventservice_config.json";
 
 class EventServiceManager
 {
@@ -98,8 +92,6 @@ class EventServiceManager
 
     void initConfig()
     {
-        loadOldBehavior();
-
         persistent_data::EventServiceConfig eventServiceConfig =
             persistent_data::EventServiceStore::getInstance()
                 .getEventServiceConfig();
@@ -141,105 +133,6 @@ class EventServiceManager
             if (subValue->userSub->sendHeartbeat)
             {
                 subValue->scheduleNextHeartbeatEvent();
-            }
-        }
-    }
-
-    static void loadOldBehavior()
-    {
-        std::ifstream eventConfigFile(eventServiceFile);
-        if (!eventConfigFile.good())
-        {
-            BMCWEB_LOG_DEBUG("Old eventService config not exist");
-            return;
-        }
-        auto jsonData = nlohmann::json::parse(eventConfigFile, nullptr, false);
-        if (jsonData.is_discarded())
-        {
-            BMCWEB_LOG_ERROR("Old eventService config parse error.");
-            return;
-        }
-
-        const nlohmann::json::object_t* obj =
-            jsonData.get_ptr<const nlohmann::json::object_t*>();
-        if (obj == nullptr)
-        {
-            return;
-        }
-        for (const auto& item : *obj)
-        {
-            if (item.first == "Configuration")
-            {
-                persistent_data::EventServiceStore::getInstance()
-                    .getEventServiceConfig()
-                    .fromJson(item.second);
-            }
-            else if (item.first == "Subscriptions")
-            {
-                for (const auto& elem : item.second)
-                {
-                    std::optional<persistent_data::UserSubscription>
-                        newSubscription =
-                            persistent_data::UserSubscription::fromJson(elem,
-                                                                        true);
-                    if (!newSubscription)
-                    {
-                        BMCWEB_LOG_ERROR("Problem reading subscription "
-                                         "from old persistent store");
-                        continue;
-                    }
-                    persistent_data::UserSubscription& newSub =
-                        *newSubscription;
-
-                    std::uniform_int_distribution<uint32_t> dist(0);
-                    bmcweb::OpenSSLGenerator gen;
-
-                    std::string id;
-
-                    int retry = 3;
-                    while (retry != 0)
-                    {
-                        id = std::to_string(dist(gen));
-                        if (gen.error())
-                        {
-                            retry = 0;
-                            break;
-                        }
-                        newSub.id = id;
-                        auto inserted =
-                            persistent_data::EventServiceStore::getInstance()
-                                .subscriptionsConfigMap.insert(std::pair(
-                                    id, std::make_shared<
-                                            persistent_data::UserSubscription>(
-                                            newSub)));
-                        if (inserted.second)
-                        {
-                            break;
-                        }
-                        --retry;
-                    }
-
-                    if (retry <= 0)
-                    {
-                        BMCWEB_LOG_ERROR(
-                            "Failed to generate random number from old "
-                            "persistent store");
-                        continue;
-                    }
-                }
-            }
-
-            persistent_data::getConfig().writeData();
-            std::error_code ec;
-            std::filesystem::remove(eventServiceFile, ec);
-            if (ec)
-            {
-                BMCWEB_LOG_DEBUG(
-                    "Failed to remove old event service file.  Ignoring");
-            }
-            else
-            {
-                BMCWEB_LOG_DEBUG("Remove old eventservice config");
             }
         }
     }
@@ -638,14 +531,14 @@ class EventServiceManager
         // MemberId is 0 : since we are sending one event record.
         logEntryJson["MemberId"] = "0";
 
-        nlohmann::json msg;
+        nlohmann::json::object_t msg;
         msg["@odata.type"] = "#Event.v1_4_0.Event";
         msg["Id"] = std::to_string(eventId);
         msg["Name"] = "Event Log";
         msg["Events"] = logEntryArray;
 
-        std::string strMsg =
-            msg.dump(2, ' ', true, nlohmann::json::error_handler_t::replace);
+        std::string strMsg = nlohmann::json(msg).dump(
+            2, ' ', true, nlohmann::json::error_handler_t::replace);
 
         messages.push_back(Event(eventId, msg));
         for (const auto& it : subscriptionsMap)

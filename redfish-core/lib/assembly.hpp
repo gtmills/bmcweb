@@ -417,7 +417,7 @@ inline void startOrStopADCSensor(
         method = "StopUnit";
     }
 
-    crow::connections::systemBus->async_method_call(
+    dbus::utility::async_method_call(
         [asyncResp](const boost::system::error_code& ec) {
             if (ec)
             {
@@ -641,7 +641,7 @@ inline void setAssemblyLocationIndicators(
                     action = "deleteFRUVPD";
                 }
 
-                crow::connections::systemBus->async_method_call(
+                dbus::utility::async_method_call(
                     [asyncResp, action](const boost::system::error_code& ec) {
                         if (ec)
                         {
@@ -683,7 +683,7 @@ inline void handleChassisAssemblyPatch(
 
     chassis_utils::getChassisAssembly(
         asyncResp, chassisID,
-        [req, asyncResp,
+        [req = std::make_shared<crow::Request>(req.copy()), asyncResp,
          chassisID](const std::optional<std::string>& validChassisPath,
                     const std::vector<std::string>& assemblyList) {
             if (!validChassisPath || assemblyList.empty())
@@ -694,7 +694,7 @@ inline void handleChassisAssemblyPatch(
                 return;
             }
 
-            setAssemblyLocationIndicators(req, asyncResp, chassisID,
+            setAssemblyLocationIndicators(*req, asyncResp, chassisID,
                                           assemblyList);
         });
 }
@@ -787,7 +787,7 @@ inline void fillWithAssemblyId(
             // Mak sure whether the retrieved assembly associations are
             // implemented before finding the assembly id as per bmcweb Assembly
             // design.
-            crow::connections::systemBus->async_method_call(
+            dbus::utility::async_method_call(
                 [asyncResp, assemblyUriPropPath, assemblyParentObjPath,
                  assembledObjPath, assemblyAssoc, assembledUriVal](
                     const boost::system::error_code& ec1,
