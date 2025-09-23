@@ -492,6 +492,7 @@ Fields common to all schemas
 
 ###### Assembly
 
+- LocationIndicatorActive
 - Model
 - PartNumber
 - SerialNumber

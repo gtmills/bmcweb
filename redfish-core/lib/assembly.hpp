@@ -17,7 +17,6 @@
 #include "registries/privilege_registry.hpp"
 #include "utils/assembly_utils.hpp"
 #include "utils/asset_utils.hpp"
-#include "utils/chassis_utils.hpp"
 #include "utils/json_utils.hpp"
 #include "utils/name_utils.hpp"
 
@@ -247,6 +246,13 @@ inline void getAssemblyProperties(
             std::bind_front(afterGetDbusObject, asyncResp, assembly,
                             assemblyJsonPtr));
 
+        getLocationIndicatorActive(
+            asyncResp, assembly, [asyncResp, assemblyJsonPtr](bool asserted) {
+                asyncResp->res
+                    .jsonValue[assemblyJsonPtr]["LocationIndicatorActive"] =
+                    asserted;
+            });
+
         nlohmann::json& assemblyArray = asyncResp->res.jsonValue["Assemblies"];
         asyncResp->res.jsonValue["Assemblies@odata.count"] =
             assemblyArray.size();
@@ -337,49 +343,31 @@ inline void handleChassisAssemblyHead(
         });
 }
 
-/**
- * @brief Set location indicator for the assemblies associated to given chassis
- * @param[in] req - The request data
- * @param[in] asyncResp - Shared pointer for asynchronous calls.
- * @param[in] chassisID - Chassis the assemblies are associated with.
- * @param[in] assemblies - list of all the assemblies associated with the
- * chassis.
-
- * @return None.
- */
-inline void setAssemblyLocationIndicators(
-    const crow::Request& req,
+inline void afterHandleChassisAssemblyPatch(
     const std::shared_ptr<bmcweb::AsyncResp>& asyncResp,
-    const std::string& chassisID, const std::vector<std::string>& assemblies)
+    const std::string& chassisID,
+    std::vector<nlohmann::json::object_t>& assemblyData,
+    const boost::system::error_code& ec,
+    const std::vector<std::string>& assemblyList)
 {
-    BMCWEB_LOG_DEBUG(
-        "Set LocationIndicatorActive for assembly associated to chassis = {}",
-        chassisID);
-
-    std::optional<std::vector<nlohmann::json>> assemblyData;
-    if (!json_util::readJsonAction(req, asyncResp->res, "Assemblies",
-                                   assemblyData))
+    if (ec)
     {
-        return;
-    }
-    if (!assemblyData)
-    {
+        BMCWEB_LOG_WARNING("Chassis {} not found", chassisID);
+        messages::resourceNotFound(asyncResp->res, "Chassis", chassisID);
         return;
     }
 
-    std::vector<nlohmann::json> items = std::move(*assemblyData);
     std::map<std::string, bool> locationIndicatorActiveMap;
     std::map<std::string, nlohmann::json> oemIndicatorMap;
 
-    for (auto& item : items)
+    for (nlohmann::json::object_t& item : assemblyData)
     {
         std::optional<std::string> memberId;
         std::optional<bool> locationIndicatorActive;
         std::optional<nlohmann::json> oem;
-
-        if (!json_util::readJson(
-                item, asyncResp->res, "LocationIndicatorActive",
-                locationIndicatorActive, "MemberId", memberId, "Oem", oem))
+        if (!json_util::readJsonObject(item, asyncResp->res, "MemberId",
+                                       memberId, "LocationIndicatorActive",
+                                       locationIndicatorActive, "Oem", oem))
         {
             return;
         }
@@ -415,7 +403,7 @@ inline void setAssemblyLocationIndicators(
     }
 
     std::size_t assemblyIndex = 0;
-    for (const auto& assembly : assemblies)
+    for (const auto& assembly : assemblyList)
     {
         auto iter =
             locationIndicatorActiveMap.find(std::to_string(assemblyIndex));
@@ -481,12 +469,12 @@ inline void setAssemblyLocationIndicators(
                 }
 
                 dbus::utility::async_method_call(
-                    [asyncResp, action](const boost::system::error_code& ec) {
-                        if (ec)
+                    [asyncResp, action](const boost::system::error_code& ec1) {
+                        if (ec1)
                         {
                             BMCWEB_LOG_ERROR(
                                 "Call to Manager failed for action: {} with error: {}",
-                                action, ec.value());
+                                action, ec1.value());
                             messages::internalError(asyncResp->res);
                             return;
                         }
@@ -518,24 +506,17 @@ inline void handleChassisAssemblyPatch(
         return;
     }
 
-    BMCWEB_LOG_DEBUG("Patch chassis path");
+    std::vector<nlohmann::json::object_t> assemblyData;
+    if (!redfish::json_util::readJsonPatch(req, asyncResp->res, "Assemblies",
+                                           assemblyData))
+    {
+        return;
+    }
 
-    chassis_utils::getChassisAssembly(
+    assembly_utils::getChassisAssembly(
         asyncResp, chassisID,
-        [req = std::make_shared<crow::Request>(req.copy()), asyncResp,
-         chassisID](const std::optional<std::string>& validChassisPath,
-                    const std::vector<std::string>& assemblyList) {
-            if (!validChassisPath || assemblyList.empty())
-            {
-                BMCWEB_LOG_WARNING("Chassis not found");
-                messages::resourceNotFound(asyncResp->res, "Chassis",
-                                           chassisID);
-                return;
-            }
-
-            setAssemblyLocationIndicators(*req, asyncResp, chassisID,
-                                          assemblyList);
-        });
+        std::bind_front(afterHandleChassisAssemblyPatch, asyncResp, chassisID,
+                        assemblyData));
 }
 
 /**
