@@ -6,7 +6,6 @@
 #include "bmcweb_config.h"
 
 #include "app.hpp"
-#include "assembly.hpp"
 #include "async_resp.hpp"
 #include "dbus_singleton.hpp"
 #include "dbus_utility.hpp"
@@ -17,6 +16,7 @@
 #include "query.hpp"
 #include "registries.hpp"
 #include "registries/privilege_registry.hpp"
+#include "utils/assembly_utils.hpp"
 #include "utils/error_log_utils.hpp"
 #include "utils/time_utils.hpp"
 
@@ -398,7 +398,7 @@ inline void getRedfishUriByDbusObjPath(
                             uriPropPath /= entryJsonIdx - 1;
                             uriPropPath /= "Links/OriginOfCondition/@odata.id";
 
-                            assembly::fillWithAssemblyId(
+                            assembly_utils::fillWithAssemblyId(
                                 asyncResp, std::get<0>(assemblyParent),
                                 std::get<1>(assemblyParent),
                                 std::get<2>(assemblyParent), uriPropPath,
@@ -415,7 +415,7 @@ inline void getRedfishUriByDbusObjPath(
                             auto uriPropPath =
                                 "/Links/OriginOfCondition/@odata.id"_json_pointer;
 
-                            assembly::fillWithAssemblyId(
+                            assembly_utils::fillWithAssemblyId(
                                 asyncResp, std::get<0>(assemblyParent),
                                 std::get<1>(assemblyParent),
                                 std::get<2>(assemblyParent), uriPropPath,
