@@ -91,7 +91,7 @@ class Connection :
         connectionCount++;
 
         BMCWEB_LOG_WARNING("{} Connection created, total {}", logPtr(this),
-                         connectionCount);
+                           connectionCount);
     }
 
     ~Connection()
@@ -101,7 +101,7 @@ class Connection :
 
         connectionCount--;
         BMCWEB_LOG_WARNING("{} Connection closed, total {}", logPtr(this),
-                         connectionCount);
+                           connectionCount);
     }
 
     Connection(const Connection&) = delete;
