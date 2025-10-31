@@ -256,6 +256,10 @@ class ConnectionImpl : public Connection
             {
                 BMCWEB_LOG_ERROR("doRead error {}", ec);
             }
+            else if (ec == boost::asio::error::operation_aborted)
+            {
+                BMCWEB_LOG_WARNING("doRead operation is aborted: {}", ec);
+            }
             if (closeHandler)
             {
                 std::string reason{ws.reason().reason.c_str()};
@@ -282,16 +286,22 @@ class ConnectionImpl : public Connection
     {
         doingWrite = false;
         outBuffer.consume(bytesSent);
-        if (ec == boost::beast::websocket::error::closed)
-        {
-            // Do nothing here.  doRead handler will call the
-            // closeHandler.
-            close("Write error");
-            return;
-        }
         if (ec)
         {
-            BMCWEB_LOG_ERROR("Error in ws.async_write {}", ec);
+            if (ec == boost::beast::websocket::error::closed)
+            {
+                // Do nothing here.  doRead handler will call the
+                // closeHandler.
+                close("Write error");
+            }
+            else if (ec == boost::asio::error::operation_aborted)
+            {
+                BMCWEB_LOG_WARNING("doWrite operation is aborted: {}", ec);
+            }
+            else
+            {
+                BMCWEB_LOG_ERROR("Error in ws.async_write {}", ec);
+            }
             return;
         }
         doWrite();
