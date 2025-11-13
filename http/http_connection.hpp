@@ -233,6 +233,14 @@ class Connection :
         startDeadline();
 
         readClientIp();
+
+        if (connectionCount >= 170)
+        {
+            BMCWEB_LOG_ERROR("{} Connection count above 85%. Request {} {} {}",
+                             logPtr(this), req->methodString(), req->target(),
+                             req->ipAddress.to_string());
+        }
+
         boost::beast::async_detect_ssl(
             adaptor.next_layer(), buffer,
             std::bind_front(&self_type::afterDetectSsl, this,
