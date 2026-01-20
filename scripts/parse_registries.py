@@ -9,9 +9,7 @@ import requests
 
 PRIVILEGE_REGISTRY_JSON_FILE = "Redfish_1.6.0_PrivilegeRegistry.json"
 
-PRAGMA_ONCE: t.Final[
-    str
-] = """#pragma once
+PRAGMA_ONCE: t.Final[str] = """#pragma once
 """
 
 WARNING = """/****************************************************************
@@ -25,9 +23,7 @@ WARNING = """/****************************************************************
  * github organization.
  ***************************************************************/"""
 
-COPYRIGHT: t.Final[
-    str
-] = """// SPDX-License-Identifier: Apache-2.0
+COPYRIGHT: t.Final[str] = """// SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: Copyright OpenBMC Authors
 """
 
@@ -214,11 +210,7 @@ def get_variable_name_for_privilege_set(
     return "Or".join(names)
 
 
-PRIVILEGE_HEADER = (
-    COPYRIGHT
-    + PRAGMA_ONCE
-    + WARNING
-    + """
+PRIVILEGE_HEADER = COPYRIGHT + PRAGMA_ONCE + WARNING + """
 #include "privileges.hpp"
 
 #include <array>
@@ -228,7 +220,6 @@ PRIVILEGE_HEADER = (
 namespace redfish::privileges
 {
 """
-)
 
 
 def get_response_code(entry_id: str) -> str | None:
@@ -455,8 +446,7 @@ def create_error_registry(
     ) as out:
         out.write(PRAGMA_ONCE)
         out.write(WARNING)
-        out.write(
-            """
+        out.write("""
 // These generated headers are a superset of what is needed.
 // clang sees them as an error, so ignore
 // NOLINTBEGIN(misc-include-cleaner)
@@ -475,8 +465,7 @@ namespace redfish
 
 namespace messages
 {
-"""
-        )
+""")
         for entry_id, entry in messages.items():
             message = entry["Message"]
             for index in range(1, 10):
@@ -548,8 +537,7 @@ namespace messages
         for header in headers:
             out.write(f"#include {header}\n")
 
-        out.write(
-            """
+        out.write("""
 // Clang can't seem to decide whether this header needs to be included or not,
 // and is inconsistent.  Include it for now
 // NOLINTNEXTLINE(misc-include-cleaner)
@@ -560,10 +548,8 @@ namespace redfish
 
 namespace messages
 {
-"""
-        )
-        out.write(
-            """
+""")
+        out.write("""
 static nlohmann::json::object_t getLog(redfish::registries::{struct_name}::Index name,
                              std::span<const std::string_view> args)
 {{
@@ -576,21 +562,16 @@ static nlohmann::json::object_t getLog(redfish::registries::{struct_name}::Index
                               redfish::registries::{struct_name}::registry, index, args);
 }}
 
-""".format(
-                struct_name=struct_name
-            )
-        )
+""".format(struct_name=struct_name))
         for entry_id, entry in messages.items():
-            out.write(
-                f"""/**
+            out.write(f"""/**
  * @internal
  * @brief Formats {entry_id} message into JSON
  *
  * See header file for more information
  * @endinternal
  */
-"""
-            )
+""")
             message = entry["Message"]
             out.write(
                 make_error_function(
@@ -623,7 +604,7 @@ def make_privilege_registry() -> None:
                     None,
                 )
         for index, key in enumerate(privilege_dict):
-            (privilege_list, _) = privilege_dict[key]
+            privilege_list, _ = privilege_dict[key]
             name = get_variable_name_for_privilege_set(privilege_list)
             registry.write(
                 "const std::array<Privileges, {length}> "
