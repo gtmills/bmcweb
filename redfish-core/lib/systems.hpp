@@ -2455,6 +2455,22 @@ inline void setIdlePowerSaver(
                     "xyz.openbmc_project.Control.Power.IdlePowerSaver",
                     "Enabled", "IdlePowerSaver/Enabled", *ipsEnable);
             }
+            if (ipsExitUtil)
+            {
+                setDbusProperty(
+                    asyncResp, "IdlePowerSaver/ExitUtilizationPercent", service,
+                    path, "xyz.openbmc_project.Control.Power.IdlePowerSaver",
+                    "ExitUtilizationPercent", *ipsExitUtil);
+            }
+            if (ipsExitTime)
+            {
+                // Convert from seconds into milliseconds for DBus
+                const uint64_t timeMilliseconds = *ipsExitTime * 1000;
+                setDbusProperty(
+                    asyncResp, "IdlePowerSaver/ExitDwellTimeSeconds", service,
+                    path, "xyz.openbmc_project.Control.Power.IdlePowerSaver",
+                    "ExitDwellTime", timeMilliseconds);
+            }
             if (ipsEnterUtil)
             {
                 setDbusProperty(
@@ -2471,24 +2487,6 @@ inline void setIdlePowerSaver(
                     asyncResp, service, path,
                     "xyz.openbmc_project.Control.Power.IdlePowerSaver",
                     "EnterDwellTime", "IdlePowerSaver/EnterDwellTimeSeconds",
-                    timeMilliseconds);
-            }
-            if (ipsExitUtil)
-            {
-                setDbusProperty(
-                    asyncResp, service, path,
-                    "xyz.openbmc_project.Control.Power.IdlePowerSaver",
-                    "ExitUtilizationPercent",
-                    "IdlePowerSaver/ExitUtilizationPercent", *ipsExitUtil);
-            }
-            if (ipsExitTime)
-            {
-                // Convert from seconds into milliseconds for DBus
-                const uint64_t timeMilliseconds = *ipsExitTime * 1000;
-                setDbusProperty(
-                    asyncResp, service, path,
-                    "xyz.openbmc_project.Control.Power.IdlePowerSaver",
-                    "ExitDwellTime", "IdlePowerSaver/ExitDwellTimeSeconds",
                     timeMilliseconds);
             }
         });
