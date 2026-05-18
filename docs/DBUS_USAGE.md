@@ -22,5 +22,5 @@ schemas:
 - There are interfaces for which there is an expectation that there will only
   ever be one producer in the project (ex bmc networking, user management). In
   these cases, it is desirable to call the daemon by well known name directly.
-  Bmcweb APIs should call the mapper in cases where it's reasonably expected
+  bmcweb APIs should call the mapper in cases where it's reasonably expected
   that multiple implementations exist (ex, CPU management, Sensors).
