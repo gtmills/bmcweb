@@ -26,7 +26,7 @@ connections and h2c upgrade header for http connections.
 
 ### Authentication
 
-Bmcweb supports multiple authentication protocols:
+bmcweb supports multiple authentication protocols:
 
 - Basic authentication per RFC7617
 - Cookie based authentication for authenticating against webui-vue
