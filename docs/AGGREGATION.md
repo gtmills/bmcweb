@@ -57,7 +57,6 @@ following are a few examples of top level collections:
 /redfish/v1/Chassis
 /redfish/v1/TaskService/Tasks
 /redfish/v1/UpdateService/FirmwareInventory
-
 ```
 
 The only exception is `/redfish/v1/JsonSchemas`. We purposefully do not
