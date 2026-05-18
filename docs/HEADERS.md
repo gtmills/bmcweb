@@ -5,7 +5,7 @@
 TL;DR, History
 
 bmcweb at one point was a crow-based project. Evidence of this can still be seen
-in the http/.hpp files that still contain references to the crow namespaces.
+in the http/ .hpp files that still contain references to the crow namespaces.
 Crow makes heavy use of headers and template meta programming, and doesn't ship
 any cpp or implementation files, choosing to put everything in include once
 headers. As bmcweb evolved, it needed more capabilities, so the core was ported
