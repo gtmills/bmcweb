@@ -3,7 +3,7 @@
 The following are guidelines for bmcweb's use of DBus to construct Redfish
 schemas:
 
-- Do not require (ie set 500 internal error on) an implementation present a
+- Do not require (i.e. set 500 internal error on) an implementation present a
   property that wasn't in the first commit of the interface unless it can be
   verified that _all_ OpenBMC implementers of the interface support that
   property.
