@@ -20,7 +20,7 @@ that have not been completed.
    Verify that the @odata.type on the schema on which you've added functionality
    has a version that includes the parameters you've added
 
-5. Verify that testing was performed per TESTING.md and it is documented in my
+5. Verify that testing was performed per TESTING.md and it is documented in the
    commit message. Redfish-Service-Validator is the MINIMUM required for any
    Redfish change. Most changes require more tests than simply service
    validator. If testing was performed on a previous commit in the series, but
