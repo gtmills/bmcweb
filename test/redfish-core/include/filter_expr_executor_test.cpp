@@ -268,4 +268,83 @@ TEST(FilterParser, NestedProperty)
     filterFalse("Oem/OEM/ErrorId ne 'SWITCH_EC_STRAP_MISMATCH'", members);
 }
 
+// ── Multi-member and combined-logic tests ────────────────────────────────────
+
+// Helper: apply a filter to a multi-member collection and return the
+// surviving member count.
+static size_t memberCountAfterFilter(std::string_view filterExpr,
+                                     nlohmann::json collection)
+{
+    std::optional<filter_ast::LogicalAnd> ast = parseFilter(filterExpr);
+    if (!ast)
+    {
+        ADD_FAILURE() << "Failed to parse filter: " << filterExpr;
+        return 0;
+    }
+    applyFilterToCollection(collection, *ast);
+    return collection["Members"].size();
+}
+
+TEST(FilterParser, MultiMemberArrayFilterKeepsMatchingSubset)
+{
+    // Three members with different Count values; filter should keep only those
+    // satisfying the predicate.
+    nlohmann::json members =
+        R"({"Members": [{"Count": 1}, {"Count": 2}, {"Count": 3}]})"_json;
+
+    EXPECT_EQ(memberCountAfterFilter("Count gt 1", members), 2U);
+    EXPECT_EQ(memberCountAfterFilter("Count eq 2", members), 1U);
+    EXPECT_EQ(memberCountAfterFilter("Count lt 1", members), 0U);
+    EXPECT_EQ(memberCountAfterFilter("Count ge 1", members), 3U);
+}
+
+TEST(FilterParser, MemberMissingQueriedPropertyIsFilteredOut)
+{
+    // A member that does not have the queried key must be excluded, not cause
+    // a crash.
+    nlohmann::json members =
+        R"({"Members": [{"Count": 5}, {"Name": "noProp"}]})"_json;
+
+    // The second member has no "Count" key — it must not pass "Count eq 5".
+    EXPECT_EQ(memberCountAfterFilter("Count eq 5", members), 1U);
+    // Neither member has "Count eq 99".
+    EXPECT_EQ(memberCountAfterFilter("Count eq 99", members), 0U);
+}
+
+TEST(FilterParser, AndWithThreeClausesObeysPrecedence)
+{
+    // All three clauses must be true for a member to survive.
+    nlohmann::json members =
+        R"({"Members": [{"A": 1, "B": 2, "C": 3},
+                        {"A": 1, "B": 9, "C": 3},
+                        {"A": 9, "B": 2, "C": 3}]})"_json;
+
+    // Only the first member satisfies all three.
+    EXPECT_EQ(
+        memberCountAfterFilter("A eq 1 and B eq 2 and C eq 3", members), 1U);
+}
+
+TEST(FilterParser, OrWithThreeClausesPassesAny)
+{
+    nlohmann::json members =
+        R"({"Members": [{"Code": 1}, {"Code": 2}, {"Code": 3}]})"_json;
+
+    // Any member with Code 1 or 2 survives; Code 3 should also survive if
+    // the third clause matches.
+    EXPECT_EQ(memberCountAfterFilter("Code eq 1 or Code eq 2 or Code eq 3",
+                                     members),
+              3U);
+    EXPECT_EQ(memberCountAfterFilter("Code eq 1 or Code eq 2", members), 2U);
+}
+
+TEST(FilterParser, CollectionWithNoMembersKeyReturnsFalse)
+{
+    // applyFilterToCollection on a JSON object without a "Members" key must
+    // not crash; it should return false.
+    nlohmann::json noMembers = R"({"Name": "empty"})"_json;
+    std::optional<filter_ast::LogicalAnd> ast = parseFilter("Name eq 'empty'");
+    ASSERT_TRUE(ast);
+    EXPECT_FALSE(applyFilterToCollection(noMembers, *ast));
+}
+
 } // namespace redfish

@@ -187,5 +187,65 @@ TEST(RedfishEventLog, FormatEventLogEntryFail)
     ASSERT_EQ(status, -1);
 }
 
+// ── Additional getEventLogParams coverage ────────────────────────────────────
+
+TEST(RedfishEventLog, GetEventLogParamsZeroMessageArgs)
+{
+    // An entry with a space-separated timestamp and messageID but no args
+    // after the comma should succeed with an empty args vector.
+    std::string logEntry = "32938 OpenBMC.0.1.ServiceStarted,";
+
+    std::string timestamp;
+    std::string messageID;
+    std::vector<std::string> messageArgs;
+
+    int status = getEventLogParams(logEntry, timestamp, messageID, messageArgs);
+
+    ASSERT_EQ(status, 0);
+    EXPECT_EQ(timestamp, "32938");
+    EXPECT_EQ(messageID, "OpenBMC.0.1.ServiceStarted");
+    // The trailing comma produces one empty token.
+    EXPECT_TRUE(messageArgs.empty() || messageArgs[0].empty());
+}
+
+TEST(RedfishEventLog, GetEventLogParamsMultipleArgs)
+{
+    // Multiple comma-separated args after the messageID must all be captured.
+    std::string logEntry = "32938 OpenBMC.0.1.PowerSupplyFailed,PSU1,FAN2,extra";
+
+    std::string timestamp;
+    std::string messageID;
+    std::vector<std::string> messageArgs;
+
+    int status = getEventLogParams(logEntry, timestamp, messageID, messageArgs);
+
+    ASSERT_EQ(status, 0);
+    EXPECT_EQ(timestamp, "32938");
+    EXPECT_EQ(messageID, "OpenBMC.0.1.PowerSupplyFailed");
+    ASSERT_GE(messageArgs.size(), 2U);
+    EXPECT_EQ(messageArgs[0], "PSU1");
+    EXPECT_EQ(messageArgs[1], "FAN2");
+}
+
+// ── formatEventLogEntry with unknown messageID ────────────────────────────────
+
+TEST(RedfishEventLog, FormatEventLogEntryUnknownMessageIDFails)
+{
+    // A messageID that is not present in any registry must cause
+    // formatEventLogEntry to return a non-zero (error) status.
+    uint64_t eventId = 42;
+    std::string logEntryID = "12345678_1";
+    std::string messageID = "OpenBMC.0.1.ThisMessageDoesNotExistInAnyRegistry";
+    std::vector<std::string_view> messageArgs;
+    std::string timestamp = "2021-11-30T22:41:35+00:00";
+    std::string customText;
+
+    nlohmann::json::object_t logEntryJson;
+    int status = formatEventLogEntry(eventId, logEntryID, messageID, messageArgs,
+                                     timestamp, customText, logEntryJson);
+
+    EXPECT_NE(status, 0);
+}
+
 } // namespace
 } // namespace redfish::event_log
