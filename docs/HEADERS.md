@@ -46,7 +46,7 @@ there have been proposed a few ideas might provide some relief;
 - Reduce the bmcweb binary size to the point where link time optimization is not
   required for most usages. About half of the bmcweb build time is spent doing
   link time optimization, which, as of this time is required to keep bmcweb code
-  small enough to deploy on an actual BMCs (See DEVELOPING.md for details). One
+  small enough to deploy on actual BMCs (See DEVELOPING.md for details). One
   could theoretically determine the source of where LTO decreases the binary
   size the most, and ensure that those were all in the same compile unit, such
   that they got optimized without requiring LTO.
