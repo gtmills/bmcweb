@@ -396,7 +396,7 @@ dbus::utility::async_method_call(
     "/xyz/openbmc_project/inventory", 0, interfaces);
 ```
 
-It's required to use D-Bus utility functions provided in the file
+It is required to use D-Bus utility functions provided in the file
 include/dbus_utility.hpp instead of invoking them directly. Using the existing
 util functions will help to reduce the compilation time, increase code reuse and
 uniformity in error handling. Below are the list of existing D-Bus utility
