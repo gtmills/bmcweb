@@ -17,6 +17,7 @@ srcfiles_unittest = files(
     'include/async_resolve_test.cpp',
     'include/credential_pipe_test.cpp',
     'include/dbus_privileges_test.cpp',
+    'include/http_utility_getcontenttype_test.cpp',
     'include/http_utility_test.cpp',
     'include/human_sort_test.cpp',
     'include/json_html_serializer.cpp',
