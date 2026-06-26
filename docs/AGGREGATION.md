@@ -96,7 +96,7 @@ its resources would appear as `/redfish/v1/Systems/sat0_system`.
 
 Requests to top level collections are locally processed like normal by the
 aggregating BMC. In addition, the request is forwarded to the satellite BMCs as
-long as it was a GET request. Any other types of request is still handled
+long as it was a GET request. Any other types of request are still handled
 locally, but the aggregator will not forward it to the satellites.
 
 The responses are processed by first adding the aggregation prefix to the URIs
