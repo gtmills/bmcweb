@@ -21,6 +21,7 @@ srcfiles_unittest = files(
     'include/http_utility_test.cpp',
     'include/human_sort_test.cpp',
     'include/json_html_serializer.cpp',
+    'include/multipart_overflow_test.cpp',
     'include/multipart_test.cpp',
     'include/ossl_random.cpp',
     'include/sessions_test.cpp',
