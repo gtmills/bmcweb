@@ -744,5 +744,45 @@ TEST(GetFanPercent, Fail)
     percentValue.reset();
 }
 
+// ── getFanPercent out-of-range reading cases ─────────────────────────────────
+
+TEST(GetFanPercent, ValueBelowMinIsRejected)
+{
+    // A reading below the sensor floor is physically impossible; the
+    // implementation should refuse to compute a meaningful percentage.
+    std::optional<double> value = 50;
+    std::optional<double> maxValue = 200;
+    std::optional<double> minValue = 100; // value(50) < min(100)
+
+    std::optional<long> result =
+        getFanPercent("belowMin", maxValue, minValue, value);
+    EXPECT_FALSE(result.has_value());
+}
+
+TEST(GetFanPercent, ValueAboveMaxIsRejected)
+{
+    // A reading that exceeds maxValue is an over-range condition.
+    std::optional<double> value = 300;
+    std::optional<double> maxValue = 200; // value(300) > max(200)
+    std::optional<double> minValue = 0;
+
+    std::optional<long> result =
+        getFanPercent("aboveMax", maxValue, minValue, value);
+    EXPECT_FALSE(result.has_value());
+}
+
+TEST(GetFanPercent, ValueAtMinIsZeroPercent)
+{
+    // When value == minValue, the percentage should be exactly 0.
+    std::optional<double> value = 100;
+    std::optional<double> maxValue = 200;
+    std::optional<double> minValue = 100;
+
+    std::optional<long> result =
+        getFanPercent("atMin", maxValue, minValue, value);
+    EXPECT_TRUE(result.has_value());
+    EXPECT_EQ(result.value_or(-1), 0);
+}
+
 } // namespace
 } // namespace redfish::sensor_utils
