@@ -124,5 +124,45 @@ TEST(ipv4VerifyIpAndGetBitcount, NegativeTests)
     // Empty string
     EXPECT_FALSE(ipv4VerifyIpAndGetBitcount("", &bits));
 }
+
+// ── Boundary prefix lengths not covered by existing tests ───────────────────
+
+TEST(ipv4VerifyIpAndGetBitcount, AllZerosIsValidPrefixZero)
+{
+    // 0.0.0.0 represents a /0 prefix (default route); it is a valid mask.
+    uint8_t bits = 99;
+    EXPECT_TRUE(ipv4VerifyIpAndGetBitcount("0.0.0.0", &bits));
+    EXPECT_EQ(bits, 0);
+}
+
+TEST(ipv4VerifyIpAndGetBitcount, AllZerosNullBitsPointerDoesNotCrash)
+{
+    // Verify nullptr bits output works when the address is valid.
+    EXPECT_TRUE(ipv4VerifyIpAndGetBitcount("0.0.0.0", nullptr));
+}
+
+TEST(ipv4VerifyIpAndGetBitcount, AllOnesIsValidPrefixThirtyTwo)
+{
+    // 255.255.255.255 is a /32 host route; every bit is set.
+    uint8_t bits = 0;
+    EXPECT_TRUE(ipv4VerifyIpAndGetBitcount("255.255.255.255", &bits));
+    EXPECT_EQ(bits, 32);
+}
+
+TEST(ipv4VerifyIpAndGetBitcount, Slash31IsValid)
+{
+    // 255.255.255.254 is a valid /31 point-to-point mask.
+    uint8_t bits = 0;
+    EXPECT_TRUE(ipv4VerifyIpAndGetBitcount("255.255.255.254", &bits));
+    EXPECT_EQ(bits, 31);
+}
+
+TEST(ipv4VerifyIpAndGetBitcount, NonContiguousMaskWithTrailingOnesIsRejected)
+{
+    // 0.0.0.255 has ones in the host portion after zeros — not a valid mask.
+    uint8_t bits = 0;
+    EXPECT_FALSE(ipv4VerifyIpAndGetBitcount("0.0.0.255", &bits));
+}
+
 } // namespace
 } // namespace redfish::ip_util
