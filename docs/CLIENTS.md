@@ -1,6 +1,6 @@
 # Client overview
 
-bmcweb being a user and network facing daemon, is subject to a vast array of
+bmcweb is a user and network facing daemon, subject to a vast array of
 tests and clients that could target it. The below attempts to provide a
 non-exhaustive list of tests and clients that bmcweb is expected to be
 compatible with, they are split into a couple categories. Entries in the test
