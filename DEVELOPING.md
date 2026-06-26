@@ -229,7 +229,7 @@ And their use cases:
   necessarily an error in the webserver, or might only be an error in certain
   scenarios. For example, connection drops or 4xx errors.
 - info: Information for the golden path debugging.
-- debug: Information that's overly verbose such that it shouldn't be printed in
+- debug: Information that is overly verbose such that it should not be printed in
   all debug scenarios, but might be useful in some debug contexts.
 
 ### Enabling logging
