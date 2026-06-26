@@ -175,7 +175,7 @@ follow in the footsteps of.
 To that end, bmcweb will do its best to insulate clients from breaking api
 changes. Being explicit about this ensures that clients can upgrade their
 OpenBMC version without issue, and resolves a significant bottleneck in getting
-security patches deployed to users. Any change that's visible to a user is
+security patches deployed to users. Any change that is visible to a user is
 potentially a breaking change, but requiring _all_ visible changes to be
 configurable would increase the software complexity, therefore bmcweb makes
 exceptions for things which a client is reasonably expected to code against:
