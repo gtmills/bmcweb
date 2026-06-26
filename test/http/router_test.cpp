@@ -156,5 +156,91 @@ TEST(Router, 405)
     }
     EXPECT_TRUE(called);
 }
+TEST(Router, MultiParamRoute)
+{
+    std::string capturedA;
+    std::string capturedB;
+    auto twoParamCallback =
+        [&capturedA,
+         &capturedB](const Request&,
+                     const std::shared_ptr<bmcweb::AsyncResp>&,
+                     const std::string& a, const std::string& b) {
+            capturedA = a;
+            capturedB = b;
+        };
+
+    Router router;
+    std::error_code ec;
+
+    constexpr std::string_view pattern = "/chassis/<str>/sensors/<str>";
+    router.newRuleTagged<getParameterTag(pattern)>(std::string(pattern))(
+        twoParamCallback);
+    router.validate();
+
+    constexpr std::string_view url = "/chassis/A/sensors/temp1";
+    auto req = std::make_shared<Request>(
+        Request::Body{boost::beast::http::verb::get, url, 11}, ec);
+    std::shared_ptr<bmcweb::AsyncResp> asyncResp =
+        std::make_shared<bmcweb::AsyncResp>();
+
+    router.handle(req, asyncResp);
+
+    EXPECT_EQ(capturedA, "A");
+    EXPECT_EQ(capturedB, "temp1");
+}
+
+TEST(Router, TrailingSlashDoesNotMatchExactRoute)
+{
+    bool exactCalled = false;
+    auto exactCallback =
+        [&exactCalled](const Request&,
+                       const std::shared_ptr<bmcweb::AsyncResp>&) {
+            exactCalled = true;
+        };
+
+    Router router;
+    std::error_code ec;
+
+    // Register the route without a trailing slash.
+    router.newRuleTagged<getParameterTag("/foo")>("/foo")
+        .methods(boost::beast::http::verb::get)(exactCallback);
+    router.validate();
+
+    // Request with trailing slash must not match the /foo route.
+    constexpr std::string_view urlSlash = "/foo/";
+    Request slashReq{
+        {boost::beast::http::verb::get, urlSlash, 11}, ec};
+    EXPECT_EQ(router.findRoute(slashReq).route.rule, nullptr);
+    EXPECT_FALSE(exactCalled);
+}
+
+TEST(Router, AllowHeaderIncludesRegisteredMethodsOnly)
+{
+    auto getCallback =
+        [](const Request&, const std::shared_ptr<bmcweb::AsyncResp>&) {};
+    auto postCallback =
+        [](const Request&, const std::shared_ptr<bmcweb::AsyncResp>&) {};
+
+    Router router;
+    std::error_code ec;
+    constexpr std::string_view url = "/multi";
+
+    router.newRuleTagged<getParameterTag(url)>(std::string(url))
+        .methods(boost::beast::http::verb::get)(getCallback);
+    router.newRuleTagged<getParameterTag(url)>(std::string(url))
+        .methods(boost::beast::http::verb::post)(postCallback);
+    router.validate();
+
+    Request getReq{{boost::beast::http::verb::get, url, 11}, ec};
+    // Both GET and POST are registered; the Allow header must list both.
+    const std::string allowHdr = router.findRoute(getReq).allowHeader;
+    EXPECT_NE(allowHdr.find("GET"), std::string::npos);
+    EXPECT_NE(allowHdr.find("POST"), std::string::npos);
+
+    // DELETE is not registered; the rule must not be found.
+    Request deleteReq{{boost::beast::http::verb::delete_, url, 11}, ec};
+    EXPECT_EQ(router.findRoute(deleteReq).route.rule, nullptr);
+}
+
 } // namespace
 } // namespace crow
