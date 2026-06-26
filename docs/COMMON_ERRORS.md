@@ -3,7 +3,7 @@
 What follows is a list of common errors that new users to bmcweb tend to make
 when operating within its bounds for the first time. If this is your first time
 developing in bmcweb, the maintainers highly recommend reading and understanding
-_all_ of common traps before continuing with any development. Every single one
+_all_ of the common traps before continuing with any development. Every single one
 of the examples below compile without warnings, but are incorrect in
 not-always-obvious ways, or impose a pattern that tends to cause hard to find
 bugs, or bugs that appear later. Every one has been submitted to code review
