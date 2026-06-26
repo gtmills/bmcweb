@@ -190,7 +190,7 @@ async bmcweb code. While capturing by reference can be useful, given how
 difficult these types of bugs are to triage, bmcweb explicitly requires that all
 code captures variables by name explicitly, and calls out each variable being
 captured by value or by reference. The above prototypes would change to
-`[&x]()...` Which makes clear that x is captured, and its lifetime needs
+`[&x]()...` which makes clear that x is captured, and its lifetime needs
 tracked.
 
 ## 9. URLs should end in "/"
