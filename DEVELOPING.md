@@ -172,7 +172,7 @@ Commit messages should be line wrapped 50/72.
 The kernel has very similar rules around compatibility that we should aspire to
 follow in the footsteps of.
 
-To that end, bmcweb will do its' best to insulate clients from breaking api
+To that end, bmcweb will do its best to insulate clients from breaking api
 changes. Being explicit about this ensures that clients can upgrade their
 OpenBMC version without issue, and resolves a significant bottleneck in getting
 security patches deployed to users. Any change that's visible to a user is
