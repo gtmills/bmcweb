@@ -29,7 +29,7 @@ up getting compiled multiple times, then the duplicates deleted at link time.
 This isn't great for the end result.
 
 To actually effect the result that we'd like to see from multiple compile units,
-there have been proposed a few ideas might provide some relief;
+there have been proposed a few ideas that might provide some relief:
 
 - Moving the Request and Response containers to opaque structures, so a majority
   of code only needs to #include the interface, not any of the template code.
