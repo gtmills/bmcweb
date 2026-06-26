@@ -45,7 +45,7 @@ to positive API design changes up front, which increases the usefulness of the
 code we write within the industry.
 
 In the current implementation, OEM schemas for all namespaces are shipped on all
-systems. It's undesirable to have another company's, possibly a competitor, name
+systems. It is undesirable to have another company's, possibly a competitor, name
 show up in the public facing API as it exports a level of support that doesn't
 exist on those systems.
 
