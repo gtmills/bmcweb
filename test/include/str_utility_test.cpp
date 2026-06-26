@@ -60,6 +60,18 @@ TEST(AsciiToLower, Positive)
     EXPECT_EQ(asciiToLower('Z'), 'z');
 }
 
+TEST(AsciiToLower, BoundaryChars)
+{
+    using bmcweb::asciiToLower;
+    // Characters just outside A-Z range are not converted
+    EXPECT_EQ(asciiToLower('@'), '@'); // one before 'A'
+    EXPECT_EQ(asciiToLower('['), '['); // one after 'Z'
+    EXPECT_EQ(asciiToLower('`'), '`'); // one before 'a'
+    EXPECT_EQ(asciiToLower('{'), '{'); // one after 'z'
+    EXPECT_EQ(asciiToLower('5'), '5'); // digit
+    EXPECT_EQ(asciiToLower(' '), ' '); // space
+}
+
 TEST(AsciiIEquals, Positive)
 {
     using bmcweb::asciiIEquals;
@@ -69,6 +81,15 @@ TEST(AsciiIEquals, Positive)
     EXPECT_TRUE(asciiIEquals("_", "_"));
 
     EXPECT_FALSE(asciiIEquals("bar", "foo"));
+}
+
+TEST(AsciiIEquals, DifferentLengths)
+{
+    using bmcweb::asciiIEquals;
+    EXPECT_FALSE(asciiIEquals("foo", "fo"));
+    EXPECT_FALSE(asciiIEquals("fo", "foo"));
+    EXPECT_FALSE(asciiIEquals("", "a"));
+    EXPECT_FALSE(asciiIEquals("a", ""));
 }
 
 } // namespace

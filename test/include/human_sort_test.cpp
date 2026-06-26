@@ -52,4 +52,26 @@ TEST(AlphaNum, LessTest)
         "Alpha 10", "Alpha 2"};
     EXPECT_THAT(sorted, ElementsAreArray({"Alpha 2", "Alpha 10"}));
 }
+
+TEST(AlphaNum, LargerCollection)
+{
+    std::set<std::string, AlphanumLess<std::string>> sorted{
+        "CPU 10", "CPU 2", "CPU 1", "CPU 20", "CPU 3"};
+    EXPECT_THAT(sorted, ElementsAreArray(
+                            {"CPU 1", "CPU 2", "CPU 3", "CPU 10", "CPU 20"}));
+}
+
+TEST(AlphaNum, PureNumbers)
+{
+    // Pure numeric strings should sort numerically, not lexicographically.
+    EXPECT_LT(alphanumComp("9", "10"), 0);
+    EXPECT_LT(alphanumComp("10", "100"), 0);
+    EXPECT_GT(alphanumComp("100", "99"), 0);
+}
+
+TEST(AlphaNum, EqualNumbers)
+{
+    EXPECT_EQ(alphanumComp("007", "7"), 0);
+    EXPECT_EQ(alphanumComp("007", "007"), 0);
+}
 } // namespace

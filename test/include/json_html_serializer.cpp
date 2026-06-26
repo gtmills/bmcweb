@@ -60,5 +60,59 @@ TEST(JsonHtmlSerializer, dumpstring)
               boilerplateStart + "<div class=\"content\">\n\"foobar\"</div>\n" +
                   boilerplateEnd);
 }
+
+TEST(JsonHtmlSerializer, dumpNull)
+{
+    std::string out;
+    nlohmann::json j = nullptr;
+    dumpHtml(out, j);
+    EXPECT_EQ(out, boilerplateStart + "<div class=\"content\">\nnull</div>\n" +
+                       boilerplateEnd);
+}
+
+TEST(JsonHtmlSerializer, dumpBoolTrue)
+{
+    std::string out;
+    nlohmann::json j = true;
+    dumpHtml(out, j);
+    EXPECT_EQ(out, boilerplateStart + "<div class=\"content\">\ntrue</div>\n" +
+                       boilerplateEnd);
+}
+
+TEST(JsonHtmlSerializer, dumpBoolFalse)
+{
+    std::string out;
+    nlohmann::json j = false;
+    dumpHtml(out, j);
+    EXPECT_EQ(out, boilerplateStart + "<div class=\"content\">\nfalse</div>\n" +
+                       boilerplateEnd);
+}
+
+TEST(JsonHtmlSerializer, dumpEmptyObject)
+{
+    std::string out;
+    nlohmann::json j = nlohmann::json::object();
+    dumpHtml(out, j);
+    EXPECT_EQ(out, boilerplateStart + "<div class=\"content\">\n{}</div>\n" +
+                       boilerplateEnd);
+}
+
+TEST(JsonHtmlSerializer, dumpEmptyArray)
+{
+    std::string out;
+    nlohmann::json j = nlohmann::json::array();
+    dumpHtml(out, j);
+    EXPECT_EQ(out, boilerplateStart + "<div class=\"content\">\n[]</div>\n" +
+                       boilerplateEnd);
+}
+
+TEST(JsonHtmlSerializer, dumpNegativeInt)
+{
+    std::string out;
+    nlohmann::json j = -7;
+    dumpHtml(out, j);
+    EXPECT_EQ(out, boilerplateStart + "<div class=\"content\">\n-7</div>\n" +
+                       boilerplateEnd);
+}
 } // namespace
 } // namespace json_html_util

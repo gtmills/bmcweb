@@ -55,3 +55,25 @@ TEST(HttpVerbToStringTest, ValidCase)
         EXPECT_EQ(httpVerbToString(httpVerb), verbMap[httpVerb]);
     }
 }
+
+TEST(HttpVerbToStringTest, MaxReturnsEmpty)
+{
+    // HttpVerb::Max is the sentinel value and has no string representation.
+    EXPECT_EQ(httpVerbToString(HttpVerb::Max), "");
+}
+
+TEST(BoostToHttpVerb, RoundTrip)
+{
+    // Every valid HttpVerb should survive a round-trip through boost and back.
+    for (int verbIndex = 0; verbIndex < static_cast<int>(HttpVerb::Max);
+         ++verbIndex)
+    {
+        HttpVerb original = static_cast<HttpVerb>(verbIndex);
+        std::string_view name = httpVerbToString(original);
+        boost::beast::http::verb bv =
+            boost::beast::http::string_to_verb(name);
+        std::optional<HttpVerb> result = httpVerbFromBoost(bv);
+        ASSERT_TRUE(result.has_value());
+        EXPECT_EQ(*result, original);
+    }
+}

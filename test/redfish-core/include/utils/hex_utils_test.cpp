@@ -20,6 +20,36 @@ TEST(BytesToHexString, OnSuccess)
     EXPECT_EQ(bytesToHexString({{0x1a, 0x2b}}), "1A2B");
 }
 
+TEST(BytesToHexString, SingleByte)
+{
+    EXPECT_EQ(bytesToHexString({{0x00}}), "00");
+    EXPECT_EQ(bytesToHexString({{0xFF}}), "FF");
+    EXPECT_EQ(bytesToHexString({{0x0F}}), "0F");
+}
+
+TEST(BytesToHexString, Empty)
+{
+    std::vector<uint8_t> empty;
+    EXPECT_EQ(bytesToHexString(empty), "");
+}
+
+TEST(BytesToHexString, AllZeros)
+{
+    EXPECT_EQ(bytesToHexString({{0x00, 0x00, 0x00}}), "000000");
+}
+
+TEST(HexStringToBytes, LowercaseInput)
+{
+    std::vector<uint8_t> expected = {0xab, 0xcd, 0xef};
+    EXPECT_EQ(hexStringToBytes("abcdef"), expected);
+}
+
+TEST(HexStringToBytes, MixedCase)
+{
+    std::vector<uint8_t> expected = {0xAB, 0xCD};
+    EXPECT_EQ(hexStringToBytes("AbCd"), expected);
+}
+
 TEST(HexCharToNibble, ReturnsCorrectNibbleForEveryHexChar)
 {
     for (char c = 0; c < std::numeric_limits<char>::max(); ++c)
