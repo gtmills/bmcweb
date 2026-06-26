@@ -91,7 +91,7 @@ The webserver shall provide the following authentication mechanisms.
 - Cookie authentication
 - Token authentication
 
-There shall be connection between the authentication mechanism used and
+There shall be no connection between the authentication mechanism used and
 resources that are available over it. The webserver shall employ an
 authentication scheme that is in line with the rest of OpenBMC, and allows users
 and privileges to be provisioned from other interfaces.
